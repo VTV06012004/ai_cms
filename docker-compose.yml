@@ -1,0 +1,59 @@
+services:
+  db:
+    image: mysql:9.7
+    container_name: cms_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: ai_cms_db
+      MYSQL_USER: cms_user
+      MYSQL_PASSWORD: cms_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      #- ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cms_net
+
+  api:
+    build: ./api
+    container_name: cms_api
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      DB_DSN: "cms_user:cms_password@tcp(db:3306)/ai_cms_db?parseTime=true&loc=Local"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - cms_net
+  web:
+    build: ./web
+    container_name: cms_web
+    restart: always
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+      - /app/.next
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8080/api
+    depends_on:
+      - api
+    networks:
+      - cms_net
+
+volumes:
+  mysql_data:
+
+networks:
+  cms_net:
+    driver: bridge  

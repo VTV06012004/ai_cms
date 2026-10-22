@@ -1,0 +1,17 @@
+# --- Frontend (/web) ---
+/web/node_modules
+/web/.next
+/web/out
+/web/build
+
+# --- Backend (/api) ---
+/api/tmp
+/api/bin
+/api/uploads/*
+
+# --- Chung cho cả dự án ---
+.DS_Store
+.env
+.env*.local
+*.exe
+*.log
