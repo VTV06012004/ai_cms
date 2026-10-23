@@ -56,7 +56,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	// 📝 Ghi Audit Log cho hành động Đăng ký tài khoản mới
+	// Ghi Audit Log cho hành động Đăng ký tài khoản mới
 	utils.RecordAuditLog(h.DB, c, "REGISTER", fmt.Sprintf("User #%d", user.ID), "Đăng ký tài khoản mới: "+user.Email)
 
 	c.JSON(http.StatusCreated, gin.H{"message": "Đăng ký tài khoản thành công!", "user_id": user.ID})

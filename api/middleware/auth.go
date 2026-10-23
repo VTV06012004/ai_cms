@@ -64,3 +64,23 @@ func RequireRoles(roles ...string) gin.HandlerFunc {
 		c.Abort()
 	}
 }
+
+func AdminOnlyMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		role, exists := c.Get("user_role")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Không tìm thấy thông tin phân quyền"})
+			c.Abort()
+			return
+		}
+
+		// Kiểm tra role có phải admin không (chuyển về chữ thường để so sánh an toàn)
+		if roleStr, ok := role.(string); !ok || roleStr != "admin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Yêu cầu quyền quản trị viên (Admin)!"})
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}

@@ -31,7 +31,23 @@ type PostInput struct {
 // 1. Lấy danh sách Posts
 func (h *PostHandler) GetAll(c *gin.Context) {
 	var posts []models.Post
-	if err := h.DB.Preload("Author").Preload("Category").Preload("Tags").Find(&posts).Error; err != nil {
+
+	// 🛡️ Lấy thông tin role và user_id từ context (được gán qua middleware xác thực)
+	userRoleValue, roleExists := c.Get("user_role")
+	userRole, validRole := userRoleValue.(string)
+
+	userIDValue, userIDExists := c.Get("user_id")
+	userID, validUserID := userIDValue.(uint)
+
+	query := h.DB.Preload("Author").Preload("Category").Preload("Tags")
+
+	// 🛡️ NẾU LÀ AUTHOR, CHỈ TRẢ VỀ: bài của chính mình HOẶC bài đã published của người khác
+	if roleExists && validRole && userRole == "author" && userIDExists && validUserID {
+		query = query.Where("author_id = ? OR status = ?", userID, "published")
+	}
+	// Nếu là admin hoặc editor, truy vấn toàn bộ không cần điều kiện lọc
+
+	if err := query.Order("created_at DESC").Find(&posts).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -249,4 +265,74 @@ func (h *PostHandler) Delete(c *gin.Context) {
 	)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa bài viết thành công"})
+}
+
+// Admin cấp quyền duyệt bài cho user
+func (h *PostHandler) ToggleApprovePermission(c *gin.Context) {
+	userID := c.Param("id")
+	var req struct {
+		CanApprove bool `json:"can_approve"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
+		return
+	}
+
+	if err := h.DB.Model(&models.User{}).Where("id = ?", userID).Update("can_approve", req.CanApprove).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Cập nhật quyền duyệt bài thất bại"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Cập nhật quyền duyệt bài thành công"})
+}
+
+func (h *PostHandler) ModeratePost(c *gin.Context) {
+	postID := c.Param("id")
+
+	var req struct {
+		Status          string `json:"status" binding:"required"` // 'approved' hoặc 'rejected'
+		RejectionReason string `json:"rejection_reason"`          // Bắt buộc nếu là 'rejected'
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
+		return
+	}
+
+	if req.Status != "published" && req.Status != "rejected" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Trạng thái không hợp lệ"})
+		return
+	}
+
+	if req.Status == "rejected" && req.RejectionReason == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Phải nhập lý do từ chối bài viết"})
+		return
+	}
+
+	var post models.Post
+	if err := h.DB.First(&post, postID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy bài viết"})
+		return
+	}
+
+	// 🔒 CHẶN: Chỉ cho phép duyệt/từ chối khi bài viết đang ở trạng thái 'review' (Chờ duyệt)
+	if post.Status != "review" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Chỉ có thể kiểm duyệt bài viết đang ở trạng thái chờ duyệt (Review)!"})
+		return
+	}
+
+	// Cập nhật trạng thái và lý do
+	post.Status = req.Status
+	if req.Status == "published" {
+		post.RejectionReason = "" // Xóa lý do cũ nếu có
+	} else {
+		post.RejectionReason = req.RejectionReason
+	}
+
+	if err := h.DB.Save(&post).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể cập nhật trạng thái bài viết vào Database"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Đã kiểm duyệt bài viết thành công", "data": post})
 }

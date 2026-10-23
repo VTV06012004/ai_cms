@@ -22,6 +22,7 @@ interface Post {
   slug: string;
   content: string;
   status: string;
+  rejection_reason?: string;
   category_id: number;
   user_id?: number;
   author_id?: number;
@@ -31,7 +32,6 @@ interface Post {
   created_at: string;
 }
 
-// 🎨 Hàm gán Icon và Style riêng cho đúng 3 Chuyên mục: Lifestyle, Technology, News
 const getCategoryStyle = (categoryName: string = '') => {
   const name = categoryName.toLowerCase().trim();
   if (name.includes('technology') || name.includes('tech') || name.includes('công nghệ')) {
@@ -49,17 +49,15 @@ const getCategoryStyle = (categoryName: string = '') => {
 export default function PostsPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<number | 'all'>('all');
+  // 👈 Cho phép chọn 'all', id chuyên mục, hoặc 'my-posts'
+  const [selectedCategory, setSelectedCategory] = useState<number | 'all' | 'my-posts'>('all');
   const [loading, setLoading] = useState<boolean>(true);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  
-  // State quản lý Modal xem trước (Preview)
   const [previewPost, setPreviewPost] = useState<Post | null>(null);
 
   const router = useRouter();
 
   useEffect(() => {
-    // Đọc thông tin từ localStorage do trang Login lưu
     const token = localStorage.getItem('token');
     const role = localStorage.getItem('userRole');
     const userId = localStorage.getItem('userId');
@@ -120,22 +118,84 @@ export default function PostsPage() {
     }
   };
 
-  const filteredPosts = selectedCategory === 'all'
-    ? posts
-    : posts.filter((post) => (post.category_id || post.category?.id) === selectedCategory);
+  const handleModerate = async (postId: number, action: 'approve' | 'reject') => {
+    const newStatus = action === 'approve' ? 'published' : 'rejected';
+    let rejection_reason = '';
+
+    if (newStatus === 'rejected') {
+      rejection_reason = prompt('Nhập lý do từ chối bài viết này:') || '';
+      if (!rejection_reason.trim()) {
+        alert('Bạn bắt buộc phải nhập lý do từ chối!');
+        return;
+      }
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api';
+
+      await axios.put(
+        `${apiUrl}/posts/${postId}/moderate`,
+        { status: newStatus, rejection_reason },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      alert(`Đã ${action === 'approve' ? 'duyệt bài viết (Published)' : 'từ chối bài viết'} thành công!`);
+      
+      setPosts((prev) =>
+        prev.map((p) => (p.id === postId ? { ...p, status: newStatus, rejection_reason } : p))
+      );
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Thao tác kiểm duyệt thất bại!');
+    }
+  };
 
   const userRoleLower = (currentUser?.role || '').toLowerCase();
+  const currentUserId = Number(currentUser?.id || 0);
+
+  // 🛡️ LỌC BÀI VIẾT THEO QUY TẮC CHUNG
+  const visiblePosts = posts.filter((post) => {
+    if (userRoleLower === 'admin' || userRoleLower === 'editor') {
+      return true;
+    }
+
+    const postUserId = Number(post.user_id || post.author_id || post.user?.id || post.author?.id || 0);
+    const isOwner = currentUserId > 0 && postUserId > 0 && currentUserId === postUserId;
+    const isPublished = post.status === 'published';
+
+    return isOwner || isPublished;
+  });
+
+  // 🏷️ LỌC THEO CHUYÊN MỤC HOẶC "BÀI VIẾT CỦA TÔI"
+  const filteredPosts = visiblePosts.filter((post) => {
+    const postUserId = Number(post.user_id || post.author_id || post.user?.id || post.author?.id || 0);
+    const isOwner = currentUserId > 0 && postUserId > 0 && currentUserId === postUserId;
+
+    // Nếu chọn xem "Bài viết của tôi"
+    if (selectedCategory === 'my-posts') {
+      return isOwner;
+    }
+
+    // Nếu chọn "Tất cả" hoặc theo chuyên mục
+    const matchesCategory = selectedCategory === 'all' || (post.category_id || post.category?.id) === selectedCategory;
+    return matchesCategory;
+  });
+
+  // Đếm số lượng bài viết của riêng user hiện tại
+  const myPostsCount = visiblePosts.filter((post) => {
+    const postUserId = Number(post.user_id || post.author_id || post.user?.id || post.author?.id || 0);
+    return currentUserId > 0 && postUserId > 0 && currentUserId === postUserId;
+  }).length;
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800">
-      {/* 🧭 HEADER & NAVIGATION MENU */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-6">
             <h1 className="text-xl font-bold text-blue-600 cursor-pointer" onClick={() => router.push('/posts')}>
               🚀 AI CMS
             </h1>
-            <nav className="hidden md:flex space-x-4 text-sm font-medium items-center">
+            <nav className="hidden md:flex space-x-3 text-sm font-medium items-center">
               <button
                 onClick={() => router.push('/posts')}
                 className="text-blue-600 border-b-2 border-blue-600 pb-1 cursor-pointer"
@@ -148,13 +208,22 @@ export default function PostsPage() {
               >
                 Giới thiệu
               </button>
+
               {userRoleLower === 'admin' && (
-                <button
-                  onClick={() => router.push('/admin/logs')}
-                  className="hover:text-blue-600 transition cursor-pointer flex items-center gap-1 font-semibold text-purple-600 bg-purple-50 px-3 py-1 rounded-md border border-purple-200"
-                >
-                  🛡️ Nhật ký hệ thống (Audit Logs)
-                </button>
+                <>
+                  <button
+                    onClick={() => router.push('/admin/users')}
+                    className="hover:text-indigo-600 transition cursor-pointer flex items-center gap-1 font-semibold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-md border border-indigo-200"
+                  >
+                    👥 Quản lý Người dùng
+                  </button>
+                  <button
+                    onClick={() => router.push('/admin/logs')}
+                    className="hover:text-purple-600 transition cursor-pointer flex items-center gap-1 font-semibold text-purple-600 bg-purple-50 px-3 py-1 rounded-md border border-purple-200"
+                  >
+                    🛡️ Nhật ký hệ thống
+                  </button>
+                </>
               )}
             </nav>
           </div>
@@ -162,7 +231,7 @@ export default function PostsPage() {
           <div className="flex items-center gap-3">
             {currentUser && (
               <span className="text-xs text-gray-600 bg-gray-100 px-3 py-1.5 rounded-full border font-medium">
-                👤 {currentUser.email} <span className="text-blue-600 font-bold">({currentUser.role})</span> (ID: {currentUser.id})
+                👤 {currentUser.email} <span className="text-blue-600 font-bold">({currentUser.role})</span>
               </span>
             )}
             <button
@@ -181,18 +250,17 @@ export default function PostsPage() {
         </div>
       </header>
 
-      {/* 📰 MAIN CONTENT */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">Danh sách Bài viết</h2>
             <p className="text-sm text-gray-500 mt-1">
-              Khám phá và lọc nội dung theo chuyên mục chủ đề.
+              Khám phá và lọc nội dung theo chuyên mục chủ đề hoặc bài viết cá nhân.
             </p>
           </div>
 
-          {/* 🏷️ CATEGORY FILTER TABS (CÓ ICON CHO TỪNG TABS) */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0">
+            {/* NÚT TẤT CẢ */}
             <button
               onClick={() => setSelectedCategory('all')}
               className={`px-3.5 py-1.5 text-xs font-semibold rounded-full border transition whitespace-nowrap cursor-pointer ${
@@ -201,10 +269,25 @@ export default function PostsPage() {
                   : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100'
               }`}
             >
-              🌐 Tất cả ({posts.length})
+              🌐 Tất cả ({visiblePosts.length})
             </button>
+
+            {/* ✍️ NÚT LỌC RIÊNG BÀI CỦA TÔI */}
+            <button
+              onClick={() => setSelectedCategory('my-posts')}
+              className={`px-3.5 py-1.5 text-xs font-semibold rounded-full border transition whitespace-nowrap cursor-pointer flex items-center gap-1 ${
+                selectedCategory === 'my-posts'
+                  ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                  : 'bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50'
+              }`}
+            >
+              <span>✍️</span>
+              <span>Bài viết của tôi ({myPostsCount})</span>
+            </button>
+
+            {/* CÁC CHUYÊN MỤC */}
             {categories.map((cat) => {
-              const count = posts.filter(
+              const count = visiblePosts.filter(
                 (p) => (p.category_id || p.category?.id) === cat.id
               ).length;
               const style = getCategoryStyle(cat.name);
@@ -232,7 +315,7 @@ export default function PostsPage() {
           </div>
         ) : filteredPosts.length === 0 ? (
           <div className="bg-white rounded-lg p-12 text-center text-gray-400 border italic">
-            Không có bài viết nào thuộc chuyên mục này.
+            Không có bài viết nào phù hợp.
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -250,8 +333,6 @@ export default function PostsPage() {
                   : `http://localhost:8080${imgMatch[1]}`
                 : null;
 
-              // 🔒 QUÉT MỌI TRƯỜNG ID TÁC GIẢ TỪ BACKEND TRẢ VỀ
-              const currentUserId = Number(currentUser?.id || 0);
               const postUserId = Number(
                 post.user_id || 
                 post.author_id || 
@@ -286,7 +367,6 @@ export default function PostsPage() {
 
                     <div className="p-5 space-y-3">
                       <div className="flex items-center justify-between gap-2">
-                        {/* 🎨 BADGE CHUYÊN MỤC DYNAMIC ICON & COLOR */}
                         <span className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-md border ${catStyle.bg}`}>
                           <span>{catStyle.icon}</span> {postCat?.name || 'Chưa phân loại'}
                         </span>
@@ -294,6 +374,26 @@ export default function PostsPage() {
                           Tác giả ID: <span className="font-medium text-gray-600">{postUserId || 'N/A'}</span>
                         </span>
                       </div>
+
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`px-2.5 py-0.5 text-[10px] font-bold rounded-full uppercase border ${
+                          post.status === 'published'
+                            ? 'bg-green-50 text-green-700 border-green-200'
+                            : post.status === 'review'
+                            ? 'bg-amber-50 text-amber-700 border-amber-200'
+                            : post.status === 'rejected'
+                            ? 'bg-red-50 text-red-700 border-red-200'
+                            : 'bg-gray-100 text-gray-600 border-gray-200'
+                        }`}>
+                          ● {post.status}
+                        </span>
+                      </div>
+
+                      {post.status === 'rejected' && post.rejection_reason && (
+                        <div className="p-2.5 bg-red-50 border border-red-200 rounded-lg text-xs text-red-600 leading-relaxed">
+                          <span className="font-bold">Lý do từ chối:</span> {post.rejection_reason}
+                        </div>
+                      )}
 
                       <h3
                         onClick={() => setPreviewPost(post)}
@@ -308,20 +408,36 @@ export default function PostsPage() {
                     </div>
                   </div>
 
-                  {/* 🎛️ FOOTER CARD: Đầy đủ Xem, Sửa, Xóa */}
                   <div className="px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between text-xs">
                     <span className="text-gray-400">{new Date(post.created_at).toLocaleDateString('vi-VN')}</span>
                     
-                    <div className="flex items-center gap-3">
-                      {/* Nút Xem (Mở Modal Preview) */}
+                    <div className="flex items-center gap-2">
+                      {(userRoleLower === 'admin' || userRoleLower === 'editor') && post.status === 'review' && (
+                        <div className="flex items-center gap-1 bg-amber-50 border border-amber-200 p-1 rounded-lg">
+                          <button
+                            onClick={() => handleModerate(post.id, 'approve')}
+                            className="px-2 py-0.5 bg-green-600 text-white rounded font-medium hover:bg-green-700 transition cursor-pointer"
+                            title="Duyệt bài"
+                          >
+                            Duyệt
+                          </button>
+                          <button
+                            onClick={() => handleModerate(post.id, 'reject')}
+                            className="px-2 py-0.5 bg-red-600 text-white rounded font-medium hover:bg-red-700 transition cursor-pointer"
+                            title="Từ chối bài viết"
+                          >
+                            Từ chối
+                          </button>
+                        </div>
+                      )}
+
                       <button
                         onClick={() => setPreviewPost(post)}
-                        className="text-gray-600 font-semibold hover:text-blue-600 transition cursor-pointer"
+                        className="text-gray-600 font-semibold hover:text-blue-600 transition cursor-pointer px-2 py-1"
                       >
                         Xem
                       </button>
 
-                      {/* Nút Sửa & Xóa (Chỉ hiện khi đúng quyền hoặc chính chủ) */}
                       {isOwner && (
                         <>
                           <button
@@ -347,7 +463,6 @@ export default function PostsPage() {
         )}
       </main>
 
-      {/* 👁️ MODAL XEM TRƯỚC (PREVIEW) NỘI DUNG CÓ RENDER ẢNH */}
       {previewPost && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[85vh] overflow-y-auto shadow-2xl p-6 space-y-4">
@@ -376,7 +491,6 @@ export default function PostsPage() {
               <span>Ngày đăng: {new Date(previewPost.created_at).toLocaleDateString('vi-VN')}</span>
             </div>
 
-            {/* Nội dung bài viết có render ảnh từ Markdown */}
             <div className="text-sm text-gray-700 space-y-4 leading-relaxed py-2">
               {previewPost.content.split('\n').map((paragraph, index) => {
                 const imgMatch = paragraph.match(/!\[(.*?)\]\((.*?)\)/);

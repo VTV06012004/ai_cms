@@ -27,6 +27,8 @@ services:
     restart: always
     ports:
       - "8080:8080"
+    volumes:
+      - ./uploads:/app/uploads
     environment:
       DB_DSN: "cms_user:cms_password@tcp(db:3306)/ai_cms_db?parseTime=true&loc=Local"
     depends_on:

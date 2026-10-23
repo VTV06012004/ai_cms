@@ -7,14 +7,14 @@ import (
 	"os"
 	"time"
 
+	"api/handlers"
+	"api/middleware"
+	"api/models"
+
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
-
-	"api/handlers"
-	"api/middleware"
-	"api/models"
 )
 
 func main() {
@@ -129,6 +129,21 @@ func main() {
 	adminProtected.Use(middleware.AuthMiddleware(), middleware.RequireRoles("admin"))
 	{
 		adminProtected.GET("/audit-logs", auditH.GetAuditLogs)
+	}
+
+	// Nhóm router cho Admin quản lý users
+	adminGroup := r.Group("/api/admin")
+	adminGroup.Use(middleware.AuthMiddleware(), middleware.AdminOnlyMiddleware())
+	{
+		adminGroup.GET("/users", handlers.GetAllUsers(db))
+		adminGroup.PUT("/users/:id/role", handlers.UpdateUserRole(db))
+	}
+
+	// Nhóm route dành cho kiểm duyệt (Admin hoặc User được phân quyền duyệt)
+	moderationGroup := r.Group("/api")
+	moderationGroup.Use(middleware.AuthMiddleware(), middleware.RequireRoles("admin", "editor")) // Hoặc kiểm tra thêm cờ can_approve
+	{
+		moderationGroup.PUT("/posts/:id/moderate", postH.ModeratePost)
 	}
 
 	log.Println("Backend đang chạy tại cổng 8080...")
