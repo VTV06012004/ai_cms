@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nhận xét ai_cms</title>
+<style>
+:root{--bg:#fbfaf7;--card:#fff;--text:#1f2328;--muted:#5d646d;--line:#e3e0d9;--red:#b42318;--red-bg:#fdecea;--blue:#2f5d8a;--code:#f2efe8}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#16181b;--card:#1e2125;--text:#e6e6e3;--muted:#a0a6ad;--line:#33373d;--red:#ff8a80;--red-bg:#3a1f1f;--blue:#7fb0e0;--code:#262a2f}}
+:root[data-theme="dark"]{--bg:#16181b;--card:#1e2125;--text:#e6e6e3;--muted:#a0a6ad;--line:#33373d;--red:#ff8a80;--red-bg:#3a1f1f;--blue:#7fb0e0;--code:#262a2f}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:17px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+main{max-width:760px;margin:0 auto;padding:40px 16px 80px}
+h1{font-size:28px;margin:0 0 4px}
+h2{font-size:22px;margin:44px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+h3{font-size:18px;margin:0 0 8px}
+p{margin:0 0 10px}
+code{font:14px ui-monospace,Menlo,Consolas,monospace;background:var(--code);padding:1px 5px;border-radius:4px}
+.meta{color:var(--muted);font-size:14px;margin-bottom:24px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin:14px 0}
+.card p{margin:4px 0}
+.label{font-weight:700}
+.num{display:inline-block;background:var(--red-bg);color:var(--red);font-weight:700;border-radius:6px;padding:0 8px;margin-right:6px}
+.remember{color:var(--blue)}
+.file{color:var(--muted);font-size:14px}
+ul,ol{padding-left:22px}
+li{margin:6px 0}
+</style>
+</head>
+<body>
+<main>
+
+<h1>Nhận xét dự án ai_cms</h1>
+<div class="meta">26/10/2026</div>
+
+<h2>Đánh giá chung</h2>
+<p>Code chia thư mục gọn gàng, dễ đọc, test chạy được. Đây là điểm tốt, cứ giữ cách làm này.</p>
+<p>Nhưng chưa thể đưa cho người dùng thật dùng, vì còn <strong>8 lỗi</strong> làm lộ dữ liệu hoặc làm hỏng bài viết. Những lỗi này khi tự bấm thử thì không thấy, nhưng người dùng thật hoặc kẻ xấu sẽ gặp ngay.</p>
+<p>Làm theo thứ tự: <strong>sửa 8 lỗi trước</strong> → cải thiện chất lượng → làm thêm tính năng.</p>
+
+<h2>8 lỗi phải sửa ngay</h2>
+
+<div class="card">
+<h3><span class="num">1</span>Người lạ xem được bài nháp</h3>
+<p><span class="label">Lỗi:</span> Không đăng nhập vẫn xem được tất cả bài, kể cả bài nháp và bài đang chờ duyệt.</p>
+<p><span class="label">Thử:</span> mở <code>http://localhost:8081/api/posts</code> trên trình duyệt, không đăng nhập.</p>
+<p><span class="label">Sửa:</span> Người chưa đăng nhập chỉ được thấy bài đã đăng (published).</p>
+<p class="remember"><span class="label">Ghi nhớ:</span> Khi không biết người dùng là ai, cho xem ít nhất có thể.</p>
+<p class="file">File: routes.go, post_usecase.go</p>
+</div>
+
+<div class="card">
+<h3><span class="num">2</span>Không ai trở thành admin được</h3>
+<p><span class="label">Lỗi:</span> Ai đăng ký cũng là tác giả (author). Muốn lên admin thì phải có admin khác nâng quyền, mà ban đầu chưa có admin nào.</p>
+<p><span class="label">Thử:</span> xoá database, chạy lại, đăng ký tài khoản đầu tiên — không vào được trang quản trị.</p>
+<p><span class="label">Sửa:</span> Khi khởi động, nếu chưa có admin thì tự tạo một admin từ email/mật khẩu trong file cấu hình. Bỏ đoạn code coi "user có id = 1 là admin gốc".</p>
+<p class="remember"><span class="label">Ghi nhớ:</span> Luôn thử chạy app trên database trống, như lúc mới cài.</p>
+<p class="file">File: user.go, user_usecase.go</p>
+</div>
+
+<div class="card">
+<h3><span class="num">3</span>Hai bài có thể trùng đường dẫn (slug)</h3>
+<p><span class="label">Lỗi:</span> Tạo hai bài cùng slug, ví dụ <code>hello</code>, vẫn lưu được cả hai. Lúc mở link không biết hiện bài nào.</p>
+<p><span class="label">Vì sao:</span> Em đặt "không trùng" cho cặp (slug, ngày xoá). Bài chưa xoá có ngày xoá là rỗng (NULL), mà MySQL coi hai giá trị rỗng là khác nhau, nên không chặn được.</p>
+<p><span class="label">Sửa:</span> Làm sao để database thật sự chặn slug trùng, và báo lỗi "slug đã tồn tại" cho người dùng. Phải thử trên MySQL thật, không chỉ nhìn code.</p>
+<p class="remember"><span class="label">Ghi nhớ:</span> Code trông đúng chưa chắc chạy đúng. Phải thử.</p>
+<p class="file">File: post_model.go</p>
+</div>
+
+<div class="card">
+<h3><span class="num">4</span>Xem trộm lịch sử bài viết của người khác</h3>
+<p><span class="label">Lỗi:</span> Bất kỳ ai đăng nhập cũng xem được các phiên bản cũ của bài người khác, chỉ cần đổi số id trên đường dẫn.</p>
+<p><span class="label">Sửa:</span> Trước khi trả dữ liệu, kiểm tra người này có phải chủ bài, editor hoặc admin không.</p>
+<p class="remember"><span class="label">Ghi nhớ:</span> "Đã đăng nhập" chưa đủ. Phải hỏi "người này có quyền với đúng bài này không?".</p>
+<p class="file">File: revision_handler.go, revision_usecase.go</p>
+</div>
+
+<div class="card">
+<h3><span class="num">5</span>Upload file không an toàn</h3>
+<p><span class="label">Lỗi:</span></p>
+<ul>
+<li>Upload được file <code>.html</code>. Người khác mở link là đoạn code độc trong file chạy trên máy họ.</li>
+<li>Không giới hạn dung lượng. Upload file vài GB là server hết RAM và sập.</li>
+</ul>
+<p><span class="label">Sửa:</span> Chỉ nhận ảnh (jpg, png, webp, gif), kiểm tra nội dung đúng là ảnh, giới hạn tối đa 5MB.</p>
+<p class="remember"><span class="label">Ghi nhớ:</span> Đừng tin bất cứ thứ gì người dùng gửi lên.</p>
+<p class="file">File: media_usecase.go, media_handler.go</p>
+</div>
+
+<div class="card">
+<h3><span class="num">6</span>Khoá đăng nhập (JWT) có mật khẩu mặc định</h3>
+<p><span class="label">Lỗi:</span></p>
+<ul>
+<li>Quên cấu hình <code>JWT_SECRET</code> thì app dùng một chuỗi viết sẵn trong code. Ai đọc được code là tự tạo được token admin.</li>
+<li>Hạ quyền một người xong, họ vẫn giữ quyền cũ thêm 24 giờ vì token cũ chưa hết hạn.</li>
+</ul>
+<p><span class="label">Sửa:</span> Thiếu <code>JWT_SECRET</code> thì app không chạy. Mỗi request kiểm tra quyền theo database, hoặc cho token hết hạn nhanh (khoảng 15 phút).</p>
+<p class="remember"><span class="label">Ghi nhớ:</span> Thiếu cấu hình bảo mật thì dừng app, đừng tự dùng giá trị mặc định.</p>
+<p class="file">File: token.go, docker-compose.yml</p>
+</div>
+
+<div class="card">
+<h3><span class="num">7</span>File <code>.env</code> bị đưa lên git</h3>
+<p><span class="label">Lỗi:</span> File cấu hình chứa thông tin kết nối database đang nằm trong git. Đã đẩy lên git thì ai có repo cũng đọc được, xoá đi vẫn còn trong lịch sử.</p>
+<p><span class="label">Sửa:</span> Bỏ <code>.env</code> khỏi git, thêm file <code>.gitignore</code>, tạo file <code>.env.example</code> chỉ chứa tên biến và giá trị giả, đổi mật khẩu database.</p>
+<p class="remember"><span class="label">Ghi nhớ:</span> Mật khẩu và khoá bí mật không bao giờ được nằm trong git.</p>
+</div>
+
+<div class="card">
+<h3><span class="num">8</span>Sửa bài xong thì bài tự bị gỡ xuống</h3>
+<p><span class="label">Lỗi:</span> Sửa nội dung một bài đã đăng mà không gửi kèm trạng thái, bài tự chuyển về nháp và biến mất khỏi trang.</p>
+<p><span class="label">Sửa:</span> Không gửi trạng thái thì giữ nguyên trạng thái cũ.</p>
+<p class="remember"><span class="label">Ghi nhớ:</span> Khi sửa, "không gửi" nghĩa là "không đổi", không phải "đặt về mặc định".</p>
+<p class="file">File: post.go, post_usecase.go</p>
+</div>
+
+<h2>Cần cải thiện thêm (sau khi sửa xong 8 lỗi)</h2>
+<ol>
+<li><strong>Thông báo lỗi:</strong> đang trả nguyên lỗi database cho người dùng, lộ thông tin bên trong. Hãy trả câu dễ hiểu và mã lỗi đúng: 403 không có quyền, 404 không tìm thấy, 409 bị trùng, 500 lỗi server.</li>
+<li><strong>Đừng giấu lỗi:</strong> database sập mà vẫn báo "không tìm thấy bài viết" thì lúc có sự cố sẽ không biết nguyên nhân thật.</li>
+<li><strong>Phân trang:</strong> danh sách bài, user, nhật ký đang lấy hết một lần. Khi có nhiều dữ liệu sẽ rất chậm.</li>
+<li><strong>Viết thêm test</strong> cho phần xử lý nghiệp vụ (thư mục <code>usecase</code>) và phần phân quyền. Hiện chỉ có test cho phần domain.</li>
+<li><strong>Mỗi quy tắc chỉ viết ở một chỗ:</strong> kiểm tra quyền đang lặp lại ở nhiều nơi, sau này sửa chỗ này dễ quên chỗ kia. Xoá code không dùng (trạng thái <code>approved</code>, trường <code>CanApprove</code>).</li>
+<li><strong>Cấu hình:</strong> gom việc đọc biến môi trường vào một chỗ khi app khởi động.</li>
+<li><strong>Tắt app an toàn:</strong> khi dừng app thì chờ các request đang chạy xong rồi mới tắt.</li>
+<li><strong>Frontend:</strong> gom các lệnh gọi API vào một file dùng chung, tự gắn token, tự đăng xuất khi token hết hạn. Trang <code>/posts</code> sẽ hỏng khi sửa lỗi 1 nếu không gửi kèm token.</li>
+</ol>
+
+<h2>Việc cần làm và cách nộp</h2>
+<ol>
+<li>Sửa lần lượt 8 lỗi. <strong>Mỗi lỗi một branch, một Pull Request.</strong></li>
+<li>Mỗi PR ghi 3 điều: lỗi là gì, em sửa thế nào, em đã thử ra sao (lệnh test hoặc ảnh chụp).</li>
+<li>Mỗi lỗi phải có test chứng minh đã sửa.</li>
+<li>Xong 8 lỗi thì làm phần "Cần cải thiện thêm".</li>
+<li>Sau đó mới làm tính năng mới: quản lý danh mục, tag, menu đầy đủ; hẹn giờ đăng bài; thư viện ảnh; so sánh hai phiên bản bài viết; tài liệu API.</li>
+</ol>
+
+</main>
+</body>
+</html>
