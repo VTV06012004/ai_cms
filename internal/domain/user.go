@@ -1,0 +1,115 @@
+package domain
+
+import (
+	"net/mail"
+	"strings"
+	"time"
+)
+
+type UserRole string
+type Email string
+
+const (
+	UserRoleAdmin  UserRole = "admin"
+	UserRoleEditor UserRole = "editor"
+	UserRoleAuthor UserRole = "author"
+)
+
+func NewEmail(value string) (Email, error) {
+	value = strings.TrimSpace(value)
+	address, err := mail.ParseAddress(value)
+	if err != nil || address.Address != value {
+		return "", ErrInvalidEmail
+	}
+	return Email(value), nil
+}
+
+func (role UserRole) CanPublishDirectly() bool {
+	return role == UserRoleAdmin || role == UserRoleEditor
+}
+
+func (role UserRole) CanSubmitPostStatus(status PostStatus) bool {
+	switch status {
+	case PostStatusDraft, PostStatusReview:
+		return role == UserRoleAdmin || role == UserRoleEditor || role == UserRoleAuthor
+	case PostStatusPublished:
+		return role.CanPublishDirectly()
+	default:
+		return false
+	}
+}
+
+type User struct {
+	id           uint
+	email        Email
+	passwordHash string
+	name         string
+	role         UserRole
+	canApprove   bool
+	createdAt    time.Time
+	updatedAt    time.Time
+}
+
+type UserData struct {
+	ID           uint
+	Email        Email
+	PasswordHash string
+	Name         string
+	Role         UserRole
+	CanApprove   bool
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+func NewUser(name, email, passwordHash string) (*User, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, ErrUserNameRequired
+	}
+	validEmail, err := NewEmail(email)
+	if err != nil {
+		return nil, err
+	}
+	if passwordHash == "" {
+		return nil, ErrPasswordHashRequired
+	}
+	return &User{
+		name:         name,
+		email:        validEmail,
+		passwordHash: passwordHash,
+		role:         UserRoleAuthor,
+	}, nil
+}
+
+func ReconstituteUser(data UserData) *User {
+	return &User{
+		id: data.ID, email: data.Email, passwordHash: data.PasswordHash,
+		name: data.Name, role: data.Role, canApprove: data.CanApprove,
+		createdAt: data.CreatedAt, updatedAt: data.UpdatedAt,
+	}
+}
+
+func (u *User) Data() UserData {
+	return UserData{
+		ID: u.id, Email: u.email, PasswordHash: u.passwordHash,
+		Name: u.name, Role: u.role, CanApprove: u.canApprove,
+		CreatedAt: u.createdAt, UpdatedAt: u.updatedAt,
+	}
+}
+
+func cloneUser(user *User) *User {
+	if user == nil {
+		return nil
+	}
+	return ReconstituteUser(user.Data())
+}
+
+func (u *User) ChangeRole(role UserRole) error {
+	switch role {
+	case UserRoleAdmin, UserRoleEditor, UserRoleAuthor:
+		u.role = role
+		return nil
+	default:
+		return ErrInvalidRole
+	}
+}

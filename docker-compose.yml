@@ -1,0 +1,46 @@
+services:
+  db:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-ai_cms_db}
+      MYSQL_USER: ${MYSQL_USER:-cms_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-cms_password}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-local_root_password}
+    volumes:
+      - ddd_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DB_DSN: ${MYSQL_USER:-cms_user}:${MYSQL_PASSWORD:-cms_password}@tcp(db:3306)/${MYSQL_DATABASE:-ai_cms_db}?parseTime=true&loc=Local
+      JWT_SECRET: ${JWT_SECRET:-super_secret_jwt_key_cms_2026}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001}
+    ports:
+      - "${API_PORT:-8081}:8080"
+    volumes:
+      - ddd_uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8081/api}
+    ports:
+      - "${WEB_PORT:-3001}:3000"
+    depends_on:
+      - api
+
+volumes:
+  ddd_mysql_data:
+  ddd_uploads:
