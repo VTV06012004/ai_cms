@@ -16,7 +16,14 @@ func NewRevisionUseCase(revisions domain.RevisionRepository, posts domain.PostRe
 	return &RevisionUseCase{revRepo: revisions, postRepo: posts, unitOfWork: unitOfWork}
 }
 
-func (uc *RevisionUseCase) GetByPostID(postID uint) ([]domain.Revision, error) {
+func (uc *RevisionUseCase) GetByPostID(postID, userID uint, userRole string) ([]domain.Revision, error) {
+	post, err := uc.postRepo.GetByID(postID)
+	if err != nil {
+		return nil, domain.ErrPostNotFound
+	}
+	if !post.CanBeManagedBy(userID, domain.UserRole(userRole)) {
+		return nil, domain.ErrPostAccessDenied
+	}
 	return uc.revRepo.GetByPostID(postID)
 }
 
