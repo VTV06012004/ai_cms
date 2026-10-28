@@ -15,6 +15,8 @@ type UserModel struct {
 	Name         string
 	Role         string `gorm:"type:enum('admin','editor','author');default:'author'"`
 	CanApprove   bool   `gorm:"default:false"`
+	// Nullable unique key allows multiple non-root users but only one root admin.
+	RootAdminKey *uint `gorm:"uniqueIndex"`
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	DeletedAt    gorm.DeletedAt `gorm:"index"`
@@ -27,6 +29,7 @@ func (m UserModel) ToDomain() domain.User {
 }
 
 func userModelToDomain(m UserModel) *domain.User {
+	isRootAdmin := m.RootAdminKey != nil && *m.RootAdminKey == 1
 	return domain.ReconstituteUser(domain.UserData{
 		ID:           m.ID,
 		Email:        domain.Email(m.Email),
@@ -34,6 +37,7 @@ func userModelToDomain(m UserModel) *domain.User {
 		Name:         m.Name,
 		Role:         domain.UserRole(m.Role),
 		CanApprove:   m.CanApprove,
+		RootAdmin:    isRootAdmin,
 		CreatedAt:    m.CreatedAt,
 		UpdatedAt:    m.UpdatedAt,
 	})

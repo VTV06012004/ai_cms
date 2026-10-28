@@ -30,6 +30,13 @@ frontend origins on ports 3000 and 3001. Next.js public environment values are
 embedded during image build, so rebuild the web service after changing
 `NEXT_PUBLIC_API_URL`.
 
+On a database with no admin account, configure `INITIAL_ADMIN_EMAIL` and
+`INITIAL_ADMIN_PASSWORD` in a local `.env` file before starting Compose. The API
+creates this root admin once; later starts do not change its credentials or
+role. Public registrations remain authors. Choose a strong password and do not
+commit the `.env` file. Existing databases with admin accounts can start without
+these bootstrap variables; their oldest admin is protected as the root admin.
+
 ## Layer responsibilities
 
 - `internal/domain`: business entities, invariants, value types, and repository contracts.

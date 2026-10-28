@@ -40,6 +40,9 @@ func run() error {
 	if err := migrate(db); err != nil {
 		return err
 	}
+	if err := protectExistingAdmin(db); err != nil {
+		return err
+	}
 	if err := seedDefaults(db); err != nil {
 		return err
 	}
@@ -58,6 +61,13 @@ func run() error {
 	credentials := security.NewCredentials()
 
 	userUC := usecase.NewUserUseCase(userRepo, credentials, unitOfWork)
+	if err := userUC.EnsureInitialAdmin(usecase.InitialAdminConfig{
+		Name:     os.Getenv("INITIAL_ADMIN_NAME"),
+		Email:    os.Getenv("INITIAL_ADMIN_EMAIL"),
+		Password: os.Getenv("INITIAL_ADMIN_PASSWORD"),
+	}); err != nil {
+		return err
+	}
 	postUC := usecase.NewPostUseCase(postRepo, unitOfWork)
 	categoryUC := usecase.NewCategoryUseCase(categoryRepo)
 	tagUC := usecase.NewTagUseCase(tagRepo)
@@ -83,6 +93,27 @@ func run() error {
 
 	log.Println("Backend đang chạy tại cổng 8080...")
 	return router.Run("0.0.0.0:8080")
+}
+
+func protectExistingAdmin(db *gorm.DB) error {
+	var rootAdminCount int64
+	if err := db.Model(&persistence.UserModel{}).Where("root_admin_key = ?", 1).Count(&rootAdminCount).Error; err != nil {
+		return err
+	}
+	if rootAdminCount > 0 {
+		return nil
+	}
+
+	var admin persistence.UserModel
+	err := db.Where("role = ?", "admin").Order("created_at ASC, id ASC").First(&admin).Error
+	if err == gorm.ErrRecordNotFound {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	key := uint(1)
+	return db.Model(&admin).Update("root_admin_key", key).Error
 }
 
 func migrate(db *gorm.DB) error {
