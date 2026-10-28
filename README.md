@@ -22,13 +22,17 @@ The frontend is copied from the reference project into `web/` and configured to
 call the DDD API through `NEXT_PUBLIC_API_URL`. Do not edit the reference
 `ai_cms` project to work on this copy.
 
-Compose uses development credentials by default. Override database credentials
-`JWT_SECRET`, and `CORS_ALLOWED_ORIGINS` with environment variables or a local
-`.env` file before using this setup outside local development.
-`CORS_ALLOWED_ORIGINS` is a comma-separated list and defaults to the local
-frontend origins on ports 3000 and 3001. Next.js public environment values are
-embedded during image build, so rebuild the web service after changing
-`NEXT_PUBLIC_API_URL`.
+Copy `.env.example` to `.env` and replace every `replace-with-...` value with
+fresh random credentials before starting the services. Compose requires
+`MYSQL_PASSWORD` and `MYSQL_ROOT_PASSWORD`; the API also reads `DB_DSN` when
+run directly outside Compose. Never commit `.env`. If a credential was
+previously committed, treat it as compromised and rotate it in the database
+and every service that uses it; removing the file from a new commit does not
+remove it from Git history.
+
+`CORS_ALLOWED_ORIGINS` is a comma-separated list. Next.js public environment
+values are embedded during image build, so rebuild the web service after
+changing `NEXT_PUBLIC_API_URL`.
 
 ## Layer responsibilities
 

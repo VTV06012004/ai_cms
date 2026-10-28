@@ -4,8 +4,8 @@ services:
     environment:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-ai_cms_db}
       MYSQL_USER: ${MYSQL_USER:-cms_user}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-cms_password}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-local_root_password}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Set MYSQL_PASSWORD in your .env file}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in your .env file}
     volumes:
       - ddd_mysql_data:/var/lib/mysql
     healthcheck:
