@@ -31,7 +31,7 @@ func RegisterRoutes(
 	r.GET("/api/categories", catH.GetAll)
 	r.GET("/api/tags", tagH.GetAll)
 	r.GET("/api/menus", menuH.GetAll)
-	r.Static("/uploads", "./uploads")
+	r.GET("/uploads/*filepath", mediaH.ServeUploadedFile)
 
 	// Protected Routes (JWT)
 	protected := r.Group("/api")
