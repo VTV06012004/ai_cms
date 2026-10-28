@@ -1,31 +1,58 @@
 package http
 
 import (
-	"api/internal/usecase"
+	"errors"
 	"net/http"
 	"strconv"
+
+	"api/internal/domain"
 
 	"github.com/gin-gonic/gin"
 )
 
-type RevisionHandler struct {
-	useCase *usecase.RevisionUseCase
+type revisionUseCase interface {
+	GetByPostID(postID, userID uint, userRole string) ([]domain.Revision, error)
+	RestoreRevision(revisionID, userID uint, userRole, ipAddress string) (*domain.Post, error)
 }
 
-func NewRevisionHandler(uc *usecase.RevisionUseCase) *RevisionHandler {
+type RevisionHandler struct {
+	useCase revisionUseCase
+}
+
+func NewRevisionHandler(uc revisionUseCase) *RevisionHandler {
 	return &RevisionHandler{useCase: uc}
 }
 
 func (h *RevisionHandler) GetByPostID(c *gin.Context) {
-	postId, err := strconv.ParseUint(c.Param("postId"), 10, 32)
+	postID, err := strconv.ParseUint(c.Param("postId"), 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "ID bài viết không hợp lệ"})
 		return
 	}
 
-	revisions, err := h.useCase.GetByPostID(uint(postId))
+	userIDValue, exists := c.Get("user_id")
+	userID, validUserID := userIDValue.(uint)
+	if !exists || !validUserID {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Không tìm thấy thông tin người dùng"})
+		return
+	}
+	roleValue, exists := c.Get("user_role")
+	userRole, validRole := roleValue.(string)
+	if !exists || !validRole {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Không tìm thấy thông tin phân quyền"})
+		return
+	}
+
+	revisions, err := h.useCase.GetByPostID(uint(postID), userID, userRole)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		switch {
+		case errors.Is(err, domain.ErrPostNotFound):
+			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy bài viết"})
+		case errors.Is(err, domain.ErrPostAccessDenied):
+			c.JSON(http.StatusForbidden, gin.H{"error": "Bạn không có quyền xem lịch sử bài viết này"})
+		default:
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải lịch sử bài viết"})
+		}
 		return
 	}
 	responses := make([]revisionResponse, 0, len(revisions))
