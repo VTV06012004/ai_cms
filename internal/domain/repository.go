@@ -3,6 +3,7 @@ package domain
 type PostListCriteria struct {
 	AuthorID         uint
 	IncludePublished bool
+	PublishedOnly    bool
 }
 
 type UserRepository interface {

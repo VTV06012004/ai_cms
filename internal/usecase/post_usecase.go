@@ -26,16 +26,31 @@ type CreatePostDTO struct {
 }
 
 func (uc *PostUseCase) GetAllPosts(userRole string, userID uint) ([]domain.Post, error) {
-	criteria := domain.PostListCriteria{}
-	if domain.UserRole(userRole) == domain.UserRoleAuthor && userID > 0 {
+	criteria := domain.PostListCriteria{PublishedOnly: true}
+	switch domain.UserRole(userRole) {
+	case domain.UserRoleAdmin, domain.UserRoleEditor:
+		criteria.PublishedOnly = false
+	case domain.UserRoleAuthor:
+		if userID == 0 {
+			break
+		}
 		criteria.AuthorID = userID
 		criteria.IncludePublished = true
+		criteria.PublishedOnly = false
 	}
 	return uc.postRepo.GetAll(criteria)
 }
 
-func (uc *PostUseCase) GetPostByID(id uint) (*domain.Post, error) {
-	return uc.postRepo.GetByID(id)
+func (uc *PostUseCase) GetPostByID(id uint, userRole string, userID uint) (*domain.Post, error) {
+	post, err := uc.postRepo.GetByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if post.Data().Status != domain.PostStatusPublished &&
+		!post.CanBeManagedBy(userID, domain.UserRole(userRole)) {
+		return nil, domain.ErrPostNotFound
+	}
+	return post, nil
 }
 
 func (uc *PostUseCase) CreatePost(userID uint, userRole string, input CreatePostDTO, ipAddress string) (*domain.Post, error) {
