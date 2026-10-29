@@ -25,6 +25,27 @@ func TestNewUserRejectsInvalidEmail(t *testing.T) {
 	}
 }
 
+func TestNewRootAdminUserCreatesProtectedAdmin(t *testing.T) {
+	user, err := NewRootAdminUser("Admin", "admin@example.com", "hashed-password")
+	if err != nil {
+		t.Fatalf("NewRootAdminUser returned error: %v", err)
+	}
+	data := user.Data()
+	if data.Role != UserRoleAdmin || !data.RootAdmin {
+		t.Fatalf("expected protected admin, got role %q and root flag %t", data.Role, data.RootAdmin)
+	}
+	if err := user.ChangeRole(UserRoleAuthor); !errors.Is(err, ErrCannotChangeRootAdmin) {
+		t.Fatalf("expected ErrCannotChangeRootAdmin, got %v", err)
+	}
+}
+
+func TestNonRootUserWithIDOneCanChangeRole(t *testing.T) {
+	user := ReconstituteUser(UserData{ID: 1, Role: UserRoleAuthor})
+	if err := user.ChangeRole(UserRoleAdmin); err != nil {
+		t.Fatalf("ID 1 without root identity should be changeable: %v", err)
+	}
+}
+
 func TestUserChangeRoleRejectsUnknownRole(t *testing.T) {
 	user := ReconstituteUser(UserData{Role: UserRoleAuthor})
 	if err := user.ChangeRole(UserRole("owner")); !errors.Is(err, ErrInvalidRole) {
