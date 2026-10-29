@@ -78,8 +78,8 @@ export default function PostsPage() {
     const fetchData = async () => {
       try {
         const [postsRes, catRes] = await Promise.all([
-          axios.get(apiUrl('posts')),
-          axios.get(apiUrl('categories'))
+          axios.get(apiUrl('posts'), { headers: { Authorization: `Bearer ${token}` } }),
+          axios.get(apiUrl('categories'), { headers: { Authorization: `Bearer ${token}` } })
         ]);
 
         setPosts(postsRes.data.data || postsRes.data || []);
