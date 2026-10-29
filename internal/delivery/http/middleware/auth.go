@@ -42,6 +42,36 @@ func AuthMiddleware() gin.HandlerFunc {
 	}
 }
 
+func OptionalAuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if c.GetHeader("Authorization") == "" {
+			c.Next()
+			return
+		}
+
+		authHeader := c.GetHeader("Authorization")
+		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+		if tokenString == authHeader {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Định dạng token không hợp lệ (******"})
+			c.Abort()
+			return
+		}
+
+		credentials := security.NewCredentials()
+		claims, err := credentials.ValidateToken(tokenString)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token không hợp lệ hoặc đã hết hạn"})
+			c.Abort()
+			return
+		}
+
+		c.Set("user_id", claims.UserID)
+		c.Set("user_email", claims.Email)
+		c.Set("user_role", claims.Role)
+		c.Next()
+	}
+}
+
 // RequireRoles kiểm tra xem người dùng có thuộc nhóm quyền cho phép hay không
 func RequireRoles(roles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {

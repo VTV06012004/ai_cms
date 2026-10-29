@@ -39,7 +39,12 @@ func (h *PostHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	post, err := h.useCase.GetPostByID(uint(id))
+	userRoleValue, _ := c.Get("user_role")
+	userRole, _ := userRoleValue.(string)
+	userIDValue, _ := c.Get("user_id")
+	userID, _ := userIDValue.(uint)
+
+	post, err := h.useCase.GetPostByID(uint(id), userRole, userID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy bài viết"})
 		return
