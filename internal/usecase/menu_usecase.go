@@ -24,14 +24,14 @@ type MenuItemInputDTO struct {
 	SortOrder int
 }
 
+func (uc *MenuUseCase) GetAllMenus() ([]domain.Menu, error) {
+	return uc.menuRepo.GetAll()
+}
+
 type MenuInputDTO struct {
 	Name      string
 	Location  string
 	MenuItems []MenuItemInputDTO
-}
-
-func (uc *MenuUseCase) GetAllMenus() ([]domain.Menu, error) {
-	return uc.menuRepo.GetAll()
 }
 
 func (uc *MenuUseCase) CreateMenu(userID uint, input MenuInputDTO, ipAddress string) (*domain.Menu, error) {
