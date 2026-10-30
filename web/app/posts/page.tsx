@@ -77,9 +77,11 @@ export default function PostsPage() {
 
     const fetchData = async () => {
       try {
+        const token = localStorage.getItem('token');
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
         const [postsRes, catRes] = await Promise.all([
-          axios.get(apiUrl('posts'), { headers: { Authorization: `Bearer ${token}` } }),
-          axios.get(apiUrl('categories'), { headers: { Authorization: `Bearer ${token}` } })
+          axios.get(apiUrl('posts'), { headers }),
+          axios.get(apiUrl('categories'))
         ]);
 
         setPosts(postsRes.data.data || postsRes.data || []);

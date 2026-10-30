@@ -86,7 +86,9 @@ function EditPostForm() {
         const tagData = Array.isArray(tagRes.data) ? tagRes.data : (tagRes.data.data || []);
         setTags(tagData);
 
-        const postRes = await axios.get(apiUrl(`posts/${id}`));
+        const postRes = await axios.get(apiUrl(`posts/${id}`), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         const post = postRes.data.data || postRes.data; 
 
         if (post) {
