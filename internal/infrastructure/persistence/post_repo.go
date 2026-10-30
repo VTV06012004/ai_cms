@@ -23,6 +23,8 @@ func (r *PostRepository) GetAll(criteria domain.PostListCriteria) ([]domain.Post
 		} else {
 			query = query.Where("author_id = ?", criteria.AuthorID)
 		}
+	} else if criteria.PublishedOnly {
+		query = query.Where("status = ?", domain.PostStatusPublished)
 	}
 	if err := query.Order("created_at DESC").Find(&posts).Error; err != nil {
 		return nil, err
