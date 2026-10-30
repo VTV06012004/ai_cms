@@ -11,7 +11,7 @@ import (
 type PostModel struct {
 	ID              uint      `gorm:"primaryKey"`
 	Title           string    `gorm:"not null"`
-	Slug            string    `gorm:"size:255;uniqueIndex:idx_posts_slug_deleted;not null"`
+	Slug            string    `gorm:"size:255;not null"`
 	Content         string    `gorm:"type:longtext"`
 	Excerpt         string    `gorm:"type:text"`
 	Status          string    `gorm:"type:enum('draft','review','approved','rejected','published');default:'draft'"`
@@ -27,7 +27,7 @@ type PostModel struct {
 	PublishedAt     *time.Time
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
-	DeletedAt       gorm.DeletedAt `gorm:"index;uniqueIndex:idx_posts_slug_deleted"`
+	DeletedAt       gorm.DeletedAt `gorm:"index"`
 	Tags            []TagModel     `gorm:"many2many:post_tags;"`
 }
 

@@ -44,3 +44,9 @@ Domain entities do not contain JSON or GORM tags. API representation is mapped
 in Delivery, while database representation and conversion are handled in
 Infrastructure. Use cases orchestrate workflows; entity methods enforce core
 rules such as valid roles, post updates, and moderation transitions.
+
+Post slug uniqueness integration tests require a disposable MySQL 8.4 instance
+and `MYSQL_TEST_DSN` with permission to create and drop databases. The tests
+create isolated temporary databases and remove them when finished. Do not point
+this variable at a production database. GitHub Actions runs the suite against a
+temporary MySQL service.
