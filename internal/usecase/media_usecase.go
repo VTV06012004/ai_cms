@@ -1,10 +1,25 @@
 package usecase
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
+	"image"
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
 	"path/filepath"
 	"strings"
 	"time"
+
+	_ "golang.org/x/image/webp"
+)
+
+const MaxImageSize = 5 << 20
+
+var (
+	ErrInvalidImage  = errors.New("chỉ chấp nhận ảnh JPG, PNG, WebP hoặc GIF hợp lệ")
+	ErrImageTooLarge = errors.New("kích thước ảnh tối đa là 5 MB")
 )
 
 type MediaStorage interface {
@@ -20,9 +35,17 @@ func NewMediaUseCase(storage MediaStorage) *MediaUseCase {
 }
 
 func (uc *MediaUseCase) UploadImage(originalName string, content []byte) (string, error) {
-	extension := filepath.Ext(filepath.Base(originalName))
-	if extension != "" && !validExtension(extension) {
-		return "", fmt.Errorf("đuôi file không hợp lệ")
+	if len(content) > MaxImageSize {
+		return "", ErrImageTooLarge
+	}
+	extension := strings.ToLower(filepath.Ext(filepath.Base(originalName)))
+	expectedFormat, validExtension := supportedImageExtensions[extension]
+	if !validExtension {
+		return "", ErrInvalidImage
+	}
+	_, format, err := image.DecodeConfig(bytes.NewReader(content))
+	if err != nil || format != expectedFormat {
+		return "", ErrInvalidImage
 	}
 	name := fmt.Sprintf("%d%s", time.Now().UnixNano(), extension)
 	if err := uc.storage.Save(name, content); err != nil {
@@ -31,13 +54,10 @@ func (uc *MediaUseCase) UploadImage(originalName string, content []byte) (string
 	return name, nil
 }
 
-func validExtension(extension string) bool {
-	for _, character := range extension[1:] {
-		if (character < 'a' || character > 'z') &&
-			(character < 'A' || character > 'Z') &&
-			(character < '0' || character > '9') {
-			return false
-		}
-	}
-	return strings.HasPrefix(extension, ".")
+var supportedImageExtensions = map[string]string{
+	".jpg":  "jpeg",
+	".jpeg": "jpeg",
+	".png":  "png",
+	".webp": "webp",
+	".gif":  "gif",
 }
