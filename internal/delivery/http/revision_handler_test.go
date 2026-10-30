@@ -9,6 +9,7 @@ import (
 
 	"api/internal/delivery/http/middleware"
 	"api/internal/domain"
+	"api/internal/infrastructure/security"
 
 	"github.com/gin-gonic/gin"
 )
@@ -63,8 +64,12 @@ func TestRevisionHandlerRequiresIdentityAndPassesAuthorizationContext(t *testing
 func TestRevisionHandlerRejectsMissingIdentity(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	stub := &revisionUseCaseStub{}
+	credentials, err := security.NewCredentials("test-secret")
+	if err != nil {
+		t.Fatal(err)
+	}
 	router := gin.New()
-	router.GET("/posts/:postId/revisions", middleware.AuthMiddleware(), NewRevisionHandler(stub).GetByPostID)
+	router.GET("/posts/:postId/revisions", middleware.AuthMiddleware(credentials), NewRevisionHandler(stub).GetByPostID)
 
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/posts/7/revisions", nil)

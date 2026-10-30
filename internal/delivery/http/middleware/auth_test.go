@@ -11,7 +11,7 @@ import (
 func TestOptionalAuthMiddlewareAllowsAnonymousRequest(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
-	router.GET("/public", OptionalAuthMiddleware(), func(c *gin.Context) {
+	router.GET("/public", OptionalAuthMiddleware(nil), func(c *gin.Context) {
 		if _, exists := c.Get("user_role"); exists {
 			t.Fatal("anonymous request should not receive an authenticated role")
 		}

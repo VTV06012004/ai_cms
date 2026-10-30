@@ -41,7 +41,7 @@ func AuthMiddleware(credentials *security.Credentials) gin.HandlerFunc {
 	}
 }
 
-func OptionalAuthMiddleware() gin.HandlerFunc {
+func OptionalAuthMiddleware(credentials *security.Credentials) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if c.GetHeader("Authorization") == "" {
 			c.Next()
@@ -51,12 +51,11 @@ func OptionalAuthMiddleware() gin.HandlerFunc {
 		authHeader := c.GetHeader("Authorization")
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 		if tokenString == authHeader {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Định dạng token không hợp lệ (******"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Định dạng token không hợp lệ"})
 			c.Abort()
 			return
 		}
 
-		credentials := security.NewCredentials()
 		claims, err := credentials.ValidateToken(tokenString)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token không hợp lệ hoặc đã hết hạn"})

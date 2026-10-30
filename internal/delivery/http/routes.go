@@ -4,8 +4,9 @@ import (
 	"api/internal/delivery/http/middleware"
 	"api/internal/infrastructure/security"
 
-	"github.com/gin-gonic/gin"
 	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
 
 func RegisterRoutes(
@@ -28,8 +29,8 @@ func RegisterRoutes(
 	r.POST("/api/auth/register", authH.Register)
 	r.POST("/api/auth/login", authH.Login)
 
-	r.GET("/api/posts", middleware.OptionalAuthMiddleware(), postH.GetAll)
-	r.GET("/api/posts/:id", middleware.OptionalAuthMiddleware(), postH.GetByID)
+	r.GET("/api/posts", middleware.OptionalAuthMiddleware(credentials), postH.GetAll)
+	r.GET("/api/posts/:id", middleware.OptionalAuthMiddleware(credentials), postH.GetByID)
 	r.GET("/api/categories", catH.GetAll)
 	r.GET("/api/tags", tagH.GetAll)
 	r.GET("/api/menus", menuH.GetAll)
