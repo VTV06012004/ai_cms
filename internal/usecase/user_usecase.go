@@ -36,6 +36,12 @@ type LoginDTO struct {
 	Password string
 }
 
+type InitialAdminConfig struct {
+	Name     string
+	Email    string
+	Password string
+}
+
 type LoginResponse struct {
 	Token string
 	User  domain.User
@@ -62,6 +68,54 @@ func (uc *UserUseCase) Register(input RegisterDTO, ipAddress string) (uint, erro
 		return 0, fmt.Errorf("không thể hoàn tất đăng ký: %w", err)
 	}
 	return user.Data().ID, nil
+}
+
+func (uc *UserUseCase) EnsureInitialAdmin(config InitialAdminConfig) error {
+	adminCount, err := uc.userRepo.CountByRole(domain.UserRoleAdmin)
+	if err != nil {
+		return fmt.Errorf("không thể kiểm tra tài khoản quản trị: %w", err)
+	}
+	if adminCount > 0 {
+		return nil
+	}
+	if config.Email == "" || config.Password == "" {
+		return errors.New("cần cấu hình INITIAL_ADMIN_EMAIL và INITIAL_ADMIN_PASSWORD khi chưa có tài khoản admin")
+	}
+	if len(config.Password) < 6 {
+		return errors.New("INITIAL_ADMIN_PASSWORD phải có ít nhất 6 ký tự")
+	}
+	if config.Name == "" {
+		config.Name = "Administrator"
+	}
+	hashedPassword, err := uc.credentials.HashPassword(config.Password)
+	if err != nil {
+		return fmt.Errorf("không thể mã hóa mật khẩu admin ban đầu: %w", err)
+	}
+	user, err := domain.NewRootAdminUser(config.Name, config.Email, hashedPassword)
+	if err != nil {
+		return fmt.Errorf("cấu hình admin ban đầu không hợp lệ: %w", err)
+	}
+
+	err = uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
+		adminCount, err := repositories.Users.CountByRole(domain.UserRoleAdmin)
+		if err != nil {
+			return fmt.Errorf("không thể kiểm tra tài khoản quản trị: %w", err)
+		}
+		if adminCount > 0 {
+			return nil
+		}
+		created, err := repositories.Users.Create(user)
+		if err != nil {
+			return fmt.Errorf("không thể tạo admin ban đầu: %w", err)
+		}
+		user = created
+		data := user.Data()
+		return repositories.Audits.RecordLog(data.ID, "BOOTSTRAP_ADMIN", fmt.Sprintf("User #%d", data.ID), "Khởi tạo tài khoản quản trị gốc", "")
+	})
+	if err != nil {
+		return fmt.Errorf("không thể hoàn tất khởi tạo admin ban đầu: %w", err)
+	}
+	return nil
 }
 
 func (uc *UserUseCase) Login(input LoginDTO, ipAddress string) (*LoginResponse, error) {
@@ -94,9 +148,6 @@ func (uc *UserUseCase) UpdateUserRole(currentUserID, targetUserID uint, newRole,
 	if currentUserID == targetUserID {
 		return domain.ErrCannotChangeOwnRole
 	}
-	if targetUserID == 1 {
-		return domain.ErrCannotChangeRootAdmin
-	}
 	switch newRole {
 	case "admin", "editor", "author":
 	default:
@@ -110,9 +161,6 @@ func (uc *UserUseCase) UpdateUserRole(currentUserID, targetUserID uint, newRole,
 		target, err := repositories.Users.GetByID(targetUserID)
 		if err != nil {
 			return errors.New("không tìm thấy người dùng")
-		}
-		if target.Data().ID == 1 {
-			return domain.ErrCannotChangeRootAdmin
 		}
 		if err := target.ChangeRole(role); err != nil {
 			return err

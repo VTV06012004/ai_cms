@@ -10,6 +10,7 @@ type UserRepository interface {
 	GetByEmail(email string) (*User, error)
 	GetByID(id uint) (*User, error)
 	GetAll() ([]User, error)
+	CountByRole(role UserRole) (int64, error)
 	UpdateRole(userID uint, newRole string) error
 }
 

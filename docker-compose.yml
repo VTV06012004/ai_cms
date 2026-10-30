@@ -21,6 +21,9 @@ services:
     environment:
       DB_DSN: ${MYSQL_USER:-cms_user}:${MYSQL_PASSWORD:-cms_password}@tcp(db:3306)/${MYSQL_DATABASE:-ai_cms_db}?parseTime=true&loc=Local
       JWT_SECRET: ${JWT_SECRET:-super_secret_jwt_key_cms_2026}
+      INITIAL_ADMIN_NAME: ${INITIAL_ADMIN_NAME:-Administrator}
+      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001}
     ports:
       - "${API_PORT:-8081}:8080"

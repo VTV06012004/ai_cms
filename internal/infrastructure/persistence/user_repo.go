@@ -16,11 +16,17 @@ func NewUserRepository(db *gorm.DB) domain.UserRepository {
 
 func (r *UserRepository) Create(user *domain.User) (*domain.User, error) {
 	data := user.Data()
+	var rootAdminKey *uint
+	if data.RootAdmin {
+		key := uint(1)
+		rootAdminKey = &key
+	}
 	model := UserModel{
 		Name:         data.Name,
 		Email:        string(data.Email),
 		PasswordHash: data.PasswordHash,
 		Role:         string(data.Role),
+		RootAdminKey: rootAdminKey,
 	}
 	if err := r.db.Create(&model).Error; err != nil {
 		return nil, err
@@ -58,6 +64,12 @@ func (r *UserRepository) GetAll() ([]domain.User, error) {
 		result = append(result, user.ToDomain())
 	}
 	return result, nil
+}
+
+func (r *UserRepository) CountByRole(role domain.UserRole) (int64, error) {
+	var count int64
+	err := r.db.Model(&UserModel{}).Where("role = ?", role).Count(&count).Error
+	return count, err
 }
 
 func (r *UserRepository) UpdateRole(userID uint, newRole string) error {
