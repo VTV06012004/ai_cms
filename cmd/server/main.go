@@ -24,6 +24,11 @@ func main() {
 }
 
 func run() error {
+	credentials, err := security.NewCredentials(os.Getenv("JWT_SECRET"))
+	if err != nil {
+		return err
+	}
+
 	db, err := database.NewMySQLConnection()
 	if err != nil {
 		return err
@@ -58,8 +63,6 @@ func run() error {
 	revisionRepo := persistence.NewRevisionRepository(db)
 	auditRepo := persistence.NewAuditRepository(db)
 	unitOfWork := persistence.NewUnitOfWork(db)
-	credentials := security.NewCredentials()
-
 	userUC := usecase.NewUserUseCase(userRepo, credentials, unitOfWork)
 	if err := userUC.EnsureInitialAdmin(usecase.InitialAdminConfig{
 		Name:     os.Getenv("INITIAL_ADMIN_NAME"),
@@ -80,6 +83,7 @@ func run() error {
 	router.Use(corsMiddleware())
 	delivery.RegisterRoutes(
 		router,
+		credentials,
 		delivery.NewAuthHandler(userUC),
 		delivery.NewPostHandler(postUC),
 		delivery.NewCategoryHandler(categoryUC),

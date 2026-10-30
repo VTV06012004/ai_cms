@@ -1,13 +1,16 @@
 package security
 
 import (
-	"os"
+	"errors"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-const legacyJWTSecret = "super_secret_jwt_key_cms_2026"
+const tokenLifetime = 15 * time.Minute
+
+var ErrMissingJWTSecret = errors.New("JWT_SECRET is required")
 
 type Credentials struct {
 	secret []byte
@@ -20,12 +23,11 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-func NewCredentials() *Credentials {
-	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
-		secret = legacyJWTSecret
+func NewCredentials(secret string) (*Credentials, error) {
+	if strings.TrimSpace(secret) == "" {
+		return nil, ErrMissingJWTSecret
 	}
-	return &Credentials{secret: []byte(secret)}
+	return &Credentials{secret: []byte(secret)}, nil
 }
 
 func (c *Credentials) HashPassword(password string) (string, error) {
@@ -42,7 +44,7 @@ func (c *Credentials) GenerateToken(userID uint, email, role string) (string, er
 		Email:  email,
 		Role:   role,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(tokenLifetime)),
 		},
 	}
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(c.secret)
