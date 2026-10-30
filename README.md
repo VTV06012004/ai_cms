@@ -22,9 +22,18 @@ The frontend is copied from the reference project into `web/` and configured to
 call the DDD API through `NEXT_PUBLIC_API_URL`. Do not edit the reference
 `ai_cms` project to work on this copy.
 
-Compose uses development credentials by default. Override database credentials
-`JWT_SECRET`, and `CORS_ALLOWED_ORIGINS` with environment variables or a local
-`.env` file before using this setup outside local development.
+Set a secret before starting the API. There is no default JWT secret, and the
+application exits if `JWT_SECRET` is missing. For local Docker Compose use,
+create a `.env` file in this directory and set `JWT_SECRET` to a randomly
+generated value (for example, generate one with `openssl rand -base64 32`).
+Do not commit `.env` or use a predictable value.
+
+The API issues JWTs that expire after 15 minutes. A role change therefore takes
+effect for existing tokens no later than their expiration; users must sign in
+again to receive a token with their updated role.
+
+Database credentials and `CORS_ALLOWED_ORIGINS` can also be configured with
+environment variables or the local `.env` file.
 `CORS_ALLOWED_ORIGINS` is a comma-separated list and defaults to the local
 frontend origins on ports 3000 and 3001. Next.js public environment values are
 embedded during image build, so rebuild the web service after changing

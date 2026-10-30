@@ -10,7 +10,7 @@ import (
 )
 
 // AuthMiddleware kiểm tra tính hợp lệ của JWT token từ Header Authorization
-func AuthMiddleware() gin.HandlerFunc {
+func AuthMiddleware(credentials *security.Credentials) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -26,7 +26,6 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		credentials := security.NewCredentials()
 		claims, err := credentials.ValidateToken(tokenString)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token không hợp lệ hoặc đã hết hạn"})

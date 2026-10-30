@@ -2,6 +2,7 @@ package http
 
 import (
 	"api/internal/delivery/http/middleware"
+	"api/internal/infrastructure/security"
 
 	"github.com/gin-gonic/gin"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 
 func RegisterRoutes(
 	r *gin.Engine,
+	credentials *security.Credentials,
 	authH *AuthHandler,
 	postH *PostHandler,
 	catH *CategoryHandler,
@@ -35,7 +37,7 @@ func RegisterRoutes(
 
 	// Protected Routes (JWT)
 	protected := r.Group("/api")
-	protected.Use(middleware.AuthMiddleware())
+	protected.Use(middleware.AuthMiddleware(credentials))
 	{
 		protected.POST("/posts", postH.Create)
 		protected.PUT("/posts/:id", postH.Update)
@@ -47,14 +49,14 @@ func RegisterRoutes(
 
 	// Admin / Moderator Routes
 	moderationGroup := r.Group("/api")
-	moderationGroup.Use(middleware.AuthMiddleware(), middleware.RequireRoles("admin", "editor"))
+	moderationGroup.Use(middleware.AuthMiddleware(credentials), middleware.RequireRoles("admin", "editor"))
 	{
 		moderationGroup.PUT("/posts/:id/moderate", postH.Moderate)
 		moderationGroup.POST("/categories", catH.Create)
 	}
 
 	adminProtected := r.Group("/api")
-	adminProtected.Use(middleware.AuthMiddleware(), middleware.RequireRoles("admin"))
+	adminProtected.Use(middleware.AuthMiddleware(credentials), middleware.RequireRoles("admin"))
 	{
 		adminProtected.GET("/audit-logs", auditH.GetAuditLogs)
 		adminProtected.POST("/menus", menuH.Create)
@@ -62,7 +64,7 @@ func RegisterRoutes(
 	}
 
 	adminUsers := r.Group("/api/admin")
-	adminUsers.Use(middleware.AuthMiddleware(), middleware.AdminOnlyMiddleware())
+	adminUsers.Use(middleware.AuthMiddleware(credentials), middleware.AdminOnlyMiddleware())
 	{
 		adminUsers.GET("/users", userH.GetAllUsers)
 		adminUsers.PUT("/users/:id/role", userH.UpdateRole)
