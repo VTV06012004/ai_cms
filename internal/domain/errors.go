@@ -14,6 +14,7 @@ var (
 	ErrPasswordHashRequired    = errors.New("mật khẩu đã mã hóa là bắt buộc")
 	ErrPostTitleRequired       = errors.New("tiêu đề bài viết là bắt buộc")
 	ErrPostSlugRequired        = errors.New("slug bài viết là bắt buộc")
+	ErrPostSlugAlreadyExists   = errors.New("slug đã tồn tại")
 	ErrPostCategoryRequired    = errors.New("danh mục bài viết là bắt buộc")
 	ErrPostNotFound            = errors.New("không tìm thấy bài viết")
 	ErrPostAccessDenied        = errors.New("bạn không có quyền thao tác bài viết này")

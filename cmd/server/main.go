@@ -117,7 +117,7 @@ func protectExistingAdmin(db *gorm.DB) error {
 }
 
 func migrate(db *gorm.DB) error {
-	return db.AutoMigrate(
+	if err := db.AutoMigrate(
 		&persistence.UserModel{},
 		&persistence.CategoryModel{},
 		&persistence.PostModel{},
@@ -126,7 +126,10 @@ func migrate(db *gorm.DB) error {
 		&persistence.AuditLogModel{},
 		&persistence.MenuModel{},
 		&persistence.MenuItemModel{},
-	)
+	); err != nil {
+		return err
+	}
+	return persistence.MigrateActivePostSlugIndex(db)
 }
 
 func seedDefaults(db *gorm.DB) error {

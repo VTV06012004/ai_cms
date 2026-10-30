@@ -1,8 +1,13 @@
 package persistence
 
 import (
+	"errors"
+	"fmt"
+	"strings"
+
 	"api/internal/domain"
 
+	mysqlDriver "github.com/go-sql-driver/mysql"
 	"gorm.io/gorm"
 )
 
@@ -50,7 +55,7 @@ func (r *PostRepository) Create(post *domain.Post, tagIDs []uint) (*domain.Post,
 	err := r.db.Transaction(func(tx *gorm.DB) error {
 		model := postModelFromDomain(post)
 		if err := tx.Create(&model).Error; err != nil {
-			return err
+			return translatePostWriteError(err)
 		}
 		if err := replacePostTags(tx, &model, tagIDs); err != nil {
 			return err
@@ -67,7 +72,7 @@ func (r *PostRepository) Update(post *domain.Post, tagIDs []uint) (*domain.Post,
 	err := r.db.Transaction(func(tx *gorm.DB) error {
 		model := postModelFromDomain(post)
 		if err := tx.Save(&model).Error; err != nil {
-			return err
+			return translatePostWriteError(err)
 		}
 		if err := replacePostTags(tx, &model, tagIDs); err != nil {
 			return err
@@ -84,6 +89,16 @@ func (r *PostRepository) Delete(id uint) error {
 }
 
 var _ domain.PostRepository = (*PostRepository)(nil)
+
+func translatePostWriteError(err error) error {
+	var mysqlError *mysqlDriver.MySQLError
+	if errors.As(err, &mysqlError) &&
+		mysqlError.Number == 1062 &&
+		strings.Contains(mysqlError.Message, "idx_posts_active_slug") {
+		return fmt.Errorf("%w: %v", domain.ErrPostSlugAlreadyExists, err)
+	}
+	return err
+}
 
 func replacePostTags(tx *gorm.DB, post *PostModel, tagIDs []uint) error {
 	var tags []TagModel

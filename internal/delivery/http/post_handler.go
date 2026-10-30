@@ -1,11 +1,13 @@
 package http
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 
+	"api/internal/domain"
 	"api/internal/usecase"
 )
 
@@ -85,7 +87,7 @@ func (h *PostHandler) Create(c *gin.Context) {
 		Status: request.Status, CategoryID: request.CategoryID, TagIDs: request.TagIDs,
 	}, c.ClientIP())
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		writePostMutationError(c, err)
 		return
 	}
 
@@ -127,11 +129,19 @@ func (h *PostHandler) Update(c *gin.Context) {
 		Status: request.Status, CategoryID: request.CategoryID, TagIDs: request.TagIDs,
 	}, c.ClientIP())
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		writePostMutationError(c, err)
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": toPostResponse(*updatedPost)})
+}
+
+func writePostMutationError(c *gin.Context, err error) {
+	if errors.Is(err, domain.ErrPostSlugAlreadyExists) {
+		c.JSON(http.StatusConflict, gin.H{"error": domain.ErrPostSlugAlreadyExists.Error()})
+		return
+	}
+	c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 }
 
 func (h *PostHandler) Delete(c *gin.Context) {
