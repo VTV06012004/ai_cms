@@ -81,16 +81,6 @@ func (uc *PostUseCase) CreatePost(userID uint, userRole string, input CreatePost
 
 func (uc *PostUseCase) UpdatePost(id, userID uint, userRole string, input CreatePostDTO, ipAddress string) (*domain.Post, error) {
 	role := domain.UserRole(userRole)
-	status := domain.PostStatus(input.Status)
-	if status == "" {
-		status = domain.PostStatusDraft
-	}
-	if status == domain.PostStatusPublished && !role.CanPublishDirectly() {
-		return nil, domain.ErrPublishNotAllowed
-	}
-	if !role.CanSubmitPostStatus(status) {
-		return nil, domain.ErrPostStatusNotAllowed
-	}
 	var updated *domain.Post
 	err := uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
 		post, err := repositories.Posts.GetByID(id)
@@ -100,9 +90,18 @@ func (uc *PostUseCase) UpdatePost(id, userID uint, userRole string, input Create
 		if !post.CanBeManagedBy(userID, role) {
 			return domain.ErrPostAccessDenied
 		}
+		requestedStatus := domain.PostStatus(input.Status)
+		if requestedStatus != "" {
+			if requestedStatus == domain.PostStatusPublished && !role.CanPublishDirectly() {
+				return domain.ErrPublishNotAllowed
+			}
+			if !role.CanSubmitPostStatus(requestedStatus) {
+				return domain.ErrPostStatusNotAllowed
+			}
+		}
 		data := post.Data()
 		previous := snapshot(post, userID)
-		if err := post.Update(input.Title, input.Slug, input.Content, status, input.CategoryID); err != nil {
+		if err := post.Update(input.Title, input.Slug, input.Content, domain.PostStatus(input.Status), input.CategoryID); err != nil {
 			return err
 		}
 		if err := repositories.Revisions.Create(previous); err != nil {

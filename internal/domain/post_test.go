@@ -77,6 +77,20 @@ func TestPostUpdateRejectsInvalidDataWithoutMutating(t *testing.T) {
 	}
 }
 
+func TestPostUpdatePreservesStatusWhenOmitted(t *testing.T) {
+	post := ReconstitutePost(PostData{
+		Title: "old", Slug: "old-slug", Content: "old body",
+		Status: PostStatusPublished, CategoryID: 1,
+	})
+
+	if err := post.Update("new", "new-slug", "new body", "", 2); err != nil {
+		t.Fatalf("Update returned error: %v", err)
+	}
+	if got := post.Data().Status; got != PostStatusPublished {
+		t.Fatalf("expected status to remain %q, got %q", PostStatusPublished, got)
+	}
+}
+
 func TestPostCanBeManagedByRoleAndOwner(t *testing.T) {
 	post := ReconstitutePost(PostData{AuthorID: 12})
 	tests := []struct {
