@@ -160,7 +160,7 @@ func (p *Post) Update(title, slug, content string, status PostStatus, categoryID
 		return ErrPostCategoryRequired
 	}
 	if status == "" {
-		status = PostStatusDraft
+		status = p.status
 	}
 	if !isValidPostStatus(status) {
 		return ErrInvalidPostStatus
