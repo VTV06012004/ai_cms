@@ -11,10 +11,10 @@ import (
 
 // NewMySQLConnection khởi tạo kết nối GORM tới cơ sở dữ liệu MySQL
 func NewMySQLConnection() (*gorm.DB, error) {
-	// Lấy DSN từ biến môi trường hoặc dùng giá trị mặc định từ docker-compose
+	// Lấy DSN từ biến môi trường; thiếu cấu hình thì không khởi động với mật khẩu mặc định.
 	dsn := os.Getenv("DB_DSN")
 	if dsn == "" {
-		dsn = "cms_user:cms_password@tcp(db:3306)/ai_cms_db?parseTime=true&loc=Local"
+		return nil, fmt.Errorf("DB_DSN is required")
 	}
 
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
