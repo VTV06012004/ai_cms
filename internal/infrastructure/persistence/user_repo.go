@@ -29,6 +29,9 @@ func (r *UserRepository) Create(user *domain.User) (*domain.User, error) {
 		RootAdminKey: rootAdminKey,
 	}
 	if err := r.db.Create(&model).Error; err != nil {
+		if isDuplicateKey(err, "email") {
+			return nil, domain.ErrEmailAlreadyExists
+		}
 		return nil, err
 	}
 	created := model.ToDomain()
@@ -39,7 +42,7 @@ func (r *UserRepository) GetByEmail(email string) (*domain.User, error) {
 	var user UserModel
 	err := r.db.Where("email = ?", email).First(&user).Error
 	if err != nil {
-		return nil, err
+		return nil, notFoundOr(err, domain.ErrUserNotFound)
 	}
 	return userModelToDomain(user), nil
 }
@@ -48,7 +51,7 @@ func (r *UserRepository) GetByID(id uint) (*domain.User, error) {
 	var user UserModel
 	err := r.db.First(&user, id).Error
 	if err != nil {
-		return nil, err
+		return nil, notFoundOr(err, domain.ErrUserNotFound)
 	}
 	return userModelToDomain(user), nil
 }
@@ -83,7 +86,7 @@ func (r *UserRepository) UpdateRole(userID uint, newRole string) error {
 			return err
 		}
 		if users == 0 {
-			return gorm.ErrRecordNotFound
+			return domain.ErrUserNotFound
 		}
 	}
 	return nil

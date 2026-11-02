@@ -38,6 +38,9 @@ func (r *CategoryRepository) GetByID(id uint) (*domain.Category, error) {
 func (r *CategoryRepository) Create(category *domain.Category) (*domain.Category, error) {
 	model := FromDomainCategory(*category)
 	if err := r.db.Create(&model).Error; err != nil {
+		if isDuplicateKey(err, "categories_slug") {
+			return nil, domain.ErrCategoryAlreadyExists
+		}
 		return nil, err
 	}
 	created := model.ToDomain()

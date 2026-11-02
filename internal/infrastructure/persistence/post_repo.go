@@ -44,7 +44,7 @@ func (r *PostRepository) GetAll(criteria domain.PostListCriteria) ([]domain.Post
 func (r *PostRepository) GetByID(id uint) (*domain.Post, error) {
 	var post PostModel
 	if err := r.db.Preload("Author").Preload("Category").Preload("Tags").First(&post, id).Error; err != nil {
-		return nil, err
+		return nil, notFoundOr(err, domain.ErrPostNotFound)
 	}
 	result := post.ToDomain()
 	return &result, nil

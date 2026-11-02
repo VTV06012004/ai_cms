@@ -76,7 +76,7 @@ func (h *RevisionHandler) Restore(c *gin.Context) {
 
 	post, err := h.useCase.RestoreRevision(uint(id), userID, role, c.ClientIP())
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		writeError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Đã khôi phục bài viết về phiên bản được chọn thành công", "data": toPostResponse(*post)})

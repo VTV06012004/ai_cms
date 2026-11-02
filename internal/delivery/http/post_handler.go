@@ -1,13 +1,11 @@
 package http
 
 import (
-	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/gin-gonic/gin"
 
-	"api/internal/domain"
 	"api/internal/usecase"
 )
 
@@ -28,7 +26,7 @@ func (h *PostHandler) GetAll(c *gin.Context) {
 
 	posts, err := h.useCase.GetAllPosts(userRole, userID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": toPostResponses(posts)})
@@ -64,7 +62,7 @@ func (h *PostHandler) Create(c *gin.Context) {
 		TagIDs     []uint `json:"tag_ids"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		writeInvalidRequest(c)
 		return
 	}
 
@@ -87,7 +85,7 @@ func (h *PostHandler) Create(c *gin.Context) {
 		Status: request.Status, CategoryID: request.CategoryID, TagIDs: request.TagIDs,
 	}, c.ClientIP())
 	if err != nil {
-		writePostMutationError(c, err)
+		writeError(c, err)
 		return
 	}
 
@@ -120,7 +118,7 @@ func (h *PostHandler) Update(c *gin.Context) {
 		TagIDs     []uint `json:"tag_ids"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		writeInvalidRequest(c)
 		return
 	}
 
@@ -129,19 +127,11 @@ func (h *PostHandler) Update(c *gin.Context) {
 		Status: request.Status, CategoryID: request.CategoryID, TagIDs: request.TagIDs,
 	}, c.ClientIP())
 	if err != nil {
-		writePostMutationError(c, err)
+		writeError(c, err)
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": toPostResponse(*updatedPost)})
-}
-
-func writePostMutationError(c *gin.Context, err error) {
-	if errors.Is(err, domain.ErrPostSlugAlreadyExists) {
-		c.JSON(http.StatusConflict, gin.H{"error": domain.ErrPostSlugAlreadyExists.Error()})
-		return
-	}
-	c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 }
 
 func (h *PostHandler) Delete(c *gin.Context) {
@@ -157,7 +147,7 @@ func (h *PostHandler) Delete(c *gin.Context) {
 	userRole, _ := userRoleValue.(string)
 
 	if err := h.useCase.DeletePost(uint(id), userID, userRole, c.ClientIP()); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		writeError(c, err)
 		return
 	}
 
@@ -177,7 +167,7 @@ func (h *PostHandler) Moderate(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Dữ liệu không hợp lệ"})
+		writeInvalidRequest(c)
 		return
 	}
 
@@ -185,7 +175,7 @@ func (h *PostHandler) Moderate(c *gin.Context) {
 	userID, _ := userIDValue.(uint)
 	post, err := h.useCase.ModeratePost(uint(id), userID, req.Status, req.RejectionReason, c.ClientIP())
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		writeError(c, err)
 		return
 	}
 

@@ -1,7 +1,6 @@
 package http
 
 import (
-	"errors"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -24,7 +23,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		Password string `json:"password" binding:"required,min=6"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		writeInvalidRequest(c)
 		return
 	}
 
@@ -32,7 +31,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		Name: request.Name, Email: request.Email, Password: request.Password,
 	}, c.ClientIP())
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		writeError(c, err)
 		return
 	}
 
@@ -45,17 +44,13 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		Password string `json:"password" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		writeInvalidRequest(c)
 		return
 	}
 
 	res, err := h.userUseCase.Login(usecase.LoginDTO{Email: request.Email, Password: request.Password}, c.ClientIP())
 	if err != nil {
-		status := http.StatusInternalServerError
-		if errors.Is(err, usecase.ErrInvalidCredentials) {
-			status = http.StatusUnauthorized
-		}
-		c.JSON(status, gin.H{"error": err.Error()})
+		writeError(c, err)
 		return
 	}
 

@@ -8,8 +8,9 @@ import (
 )
 
 type userRepositoryStub struct {
-	users  map[uint]*domain.User
-	nextID uint
+	users     map[uint]*domain.User
+	nextID    uint
+	lookupErr error
 }
 
 func newUserRepositoryStub() *userRepositoryStub {
@@ -20,7 +21,7 @@ func (r *userRepositoryStub) Create(user *domain.User) (*domain.User, error) {
 	data := user.Data()
 	for _, existing := range r.users {
 		if existing.Data().Email == data.Email {
-			return nil, errors.New("duplicate email")
+			return nil, domain.ErrEmailAlreadyExists
 		}
 	}
 	data.ID = r.nextID
@@ -31,18 +32,21 @@ func (r *userRepositoryStub) Create(user *domain.User) (*domain.User, error) {
 }
 
 func (r *userRepositoryStub) GetByEmail(email string) (*domain.User, error) {
+	if r.lookupErr != nil {
+		return nil, r.lookupErr
+	}
 	for _, user := range r.users {
 		if string(user.Data().Email) == email {
 			return user, nil
 		}
 	}
-	return nil, errors.New("user not found")
+	return nil, domain.ErrUserNotFound
 }
 
 func (r *userRepositoryStub) GetByID(id uint) (*domain.User, error) {
 	user, ok := r.users[id]
 	if !ok {
-		return nil, errors.New("user not found")
+		return nil, domain.ErrUserNotFound
 	}
 	return user, nil
 }
@@ -68,7 +72,7 @@ func (r *userRepositoryStub) CountByRole(role domain.UserRole) (int64, error) {
 func (r *userRepositoryStub) UpdateRole(userID uint, newRole string) error {
 	user, ok := r.users[userID]
 	if !ok {
-		return errors.New("user not found")
+		return domain.ErrUserNotFound
 	}
 	return user.ChangeRole(domain.UserRole(newRole))
 }
@@ -258,5 +262,39 @@ func TestEnsureInitialAdminRejectsEmailAlreadyUsedByAuthor(t *testing.T) {
 	}
 	if got := users.users[1].Data().Role; got != domain.UserRoleAuthor {
 		t.Fatalf("existing author was promoted to %q during bootstrap", got)
+	}
+}
+
+func TestLoginReturnsInvalidCredentialsOnlyWhenUserDoesNotExist(t *testing.T) {
+	users := newUserRepositoryStub()
+	useCase := newTestUserUseCase(users, &auditRepositoryStub{})
+
+	_, err := useCase.Login(LoginDTO{Email: "nobody@example.com", Password: "secret1"}, "")
+	if !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("unknown email: expected ErrInvalidCredentials, got %v", err)
+	}
+}
+
+func TestLoginDoesNotReportDatabaseFailureAsWrongPassword(t *testing.T) {
+	users := newUserRepositoryStub()
+	users.lookupErr = errors.New("connection refused")
+	useCase := newTestUserUseCase(users, &auditRepositoryStub{})
+
+	_, err := useCase.Login(LoginDTO{Email: "a@example.com", Password: "secret1"}, "")
+	if err == nil || errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("expected a real error for a database failure, got %v", err)
+	}
+}
+
+func TestRegisterReportsDuplicateEmail(t *testing.T) {
+	users := newUserRepositoryStub()
+	useCase := newTestUserUseCase(users, &auditRepositoryStub{})
+	input := RegisterDTO{Name: "A", Email: "dup@example.com", Password: "secret1"}
+
+	if _, err := useCase.Register(input, ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := useCase.Register(input, ""); !errors.Is(err, domain.ErrEmailAlreadyExists) {
+		t.Fatalf("expected ErrEmailAlreadyExists, got %v", err)
 	}
 }

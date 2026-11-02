@@ -19,7 +19,7 @@ func NewRevisionUseCase(revisions domain.RevisionRepository, posts domain.PostRe
 func (uc *RevisionUseCase) GetByPostID(postID, userID uint, userRole string) ([]domain.Revision, error) {
 	post, err := uc.postRepo.GetByID(postID)
 	if err != nil {
-		return nil, domain.ErrPostNotFound
+		return nil, err
 	}
 	if !post.CanBeManagedBy(userID, domain.UserRole(userRole)) {
 		return nil, domain.ErrPostAccessDenied
@@ -32,12 +32,12 @@ func (uc *RevisionUseCase) RestoreRevision(revisionID, userID uint, userRole, ip
 	err := uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
 		revision, err := repositories.Revisions.GetByID(revisionID)
 		if err != nil {
-			return fmt.Errorf("không tìm thấy bản revision này: %w", err)
+			return err
 		}
 		revisionData := revision.Data()
 		post, err := repositories.Posts.GetByID(revisionData.PostID)
 		if err != nil {
-			return domain.ErrPostNotFound
+			return err
 		}
 		if !post.CanBeManagedBy(userID, domain.UserRole(userRole)) {
 			return domain.ErrPostAccessDenied

@@ -100,7 +100,7 @@ func (uc *PostUseCase) UpdatePost(id, userID uint, userRole string, input Create
 	err := uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
 		post, err := repositories.Posts.GetByID(id)
 		if err != nil {
-			return domain.ErrPostNotFound
+			return err
 		}
 		if !post.CanBeManagedBy(userID, role) {
 			return domain.ErrPostAccessDenied
@@ -145,7 +145,7 @@ func (uc *PostUseCase) DeletePost(id, userID uint, userRole, ipAddress string) e
 	return uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
 		post, err := repositories.Posts.GetByID(id)
 		if err != nil {
-			return domain.ErrPostNotFound
+			return err
 		}
 		if !post.CanBeManagedBy(userID, role) {
 			return domain.ErrPostAccessDenied
@@ -163,7 +163,7 @@ func (uc *PostUseCase) ModeratePost(id, moderatorID uint, status, reason, ipAddr
 	err := uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
 		post, err := repositories.Posts.GetByID(id)
 		if err != nil {
-			return domain.ErrPostNotFound
+			return err
 		}
 		if err := post.Moderate(domain.PostStatus(status), reason, moderatorID, time.Now()); err != nil {
 			return err
