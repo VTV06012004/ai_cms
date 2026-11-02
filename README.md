@@ -1,16 +1,45 @@
 # DDD CMS
 
-## Run with Docker
+A CMS built with a Domain-Driven Design layout: a Go API (Gin + GORM + MySQL) and a
+Next.js frontend, run together with Docker Compose.
 
-From this directory:
+## Quick start (Docker)
 
-```sh
-docker compose up --build -d
-```
+1. Clone the `main` branch:
 
-The frontend is available at `http://localhost:3001` (open `/login` to sign in).
-The API is available at `http://localhost:8081`; MySQL is only exposed to the
-Compose network. The health endpoint is `http://localhost:8081/health`.
+   ```sh
+   git clone -b main https://github.com/VTV06012004/ai_cms.git
+   cd ai_cms
+   ```
+
+2. Create your local environment file from the template:
+
+   ```sh
+   cp .env.example .env        # Windows: copy .env.example .env
+   ```
+
+3. Edit `.env` and replace every `replace-with-...` value:
+
+   | Variable | Purpose |
+   | --- | --- |
+   | `JWT_SECRET` | Signing key for login tokens. Required; the API exits without it. |
+   | `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD` | Database passwords. Required by Compose. |
+   | `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD` | Credentials of the first admin account (password: at least 6 characters). Used only when the database has no admin yet. |
+
+   Use random values, for example `openssl rand -hex 32`. Never commit `.env`.
+
+4. Start everything:
+
+   ```sh
+   docker compose up --build
+   ```
+
+5. Open the app and sign in with the admin email and password you set in `.env`:
+
+   - Frontend: `http://localhost:3001` (sign in at `/login`)
+   - API: `http://localhost:8081` (health check: `http://localhost:8081/health`)
+
+MySQL is only exposed to the Compose network.
 
 To stop the containers while keeping database data and uploaded files:
 
@@ -18,38 +47,51 @@ To stop the containers while keeping database data and uploaded files:
 docker compose down
 ```
 
+To also delete the database and start again from an empty one, add `-v`
+(`docker compose down -v`).
+
+## Configuration notes
+
+- **Secrets.** There is no default JWT secret, and the application exits if
+  `JWT_SECRET` is missing. Compose also requires `MYSQL_PASSWORD` and
+  `MYSQL_ROOT_PASSWORD`. When the API runs directly outside Compose it reads
+  `DB_DSN` instead, and exits if it is missing. Never commit `.env`. If a
+  credential was ever committed, treat it as compromised and rotate it in the
+  database and every service that uses it; removing the file in a new commit does
+  not remove it from Git history.
+- **Login tokens** expire after 15 minutes. A role change therefore takes effect
+  for existing tokens no later than their expiration; users must sign in again to
+  receive a token with their updated role.
+- **First admin.** On a database with no admin account, set `INITIAL_ADMIN_EMAIL`
+  and `INITIAL_ADMIN_PASSWORD` in `.env` before starting Compose. The API creates
+  this root admin once; later starts do not change its credentials or role. Public
+  registrations remain authors. Existing databases that already have an admin can
+  start without these variables; their oldest admin is protected as the root admin.
+- **CORS and frontend URL.** `CORS_ALLOWED_ORIGINS` is a comma-separated list.
+  Next.js public environment values are embedded during image build, so rebuild
+  the web service after changing `NEXT_PUBLIC_API_URL`.
+- **Database passwords on an existing volume.** MySQL applies `MYSQL_PASSWORD` and
+  `MYSQL_ROOT_PASSWORD` only when the data volume is first created. If you change
+  them later, either keep using the old values or run `docker compose down -v` to
+  recreate the database.
+
 The frontend is copied from the reference project into `web/` and configured to
 call the DDD API through `NEXT_PUBLIC_API_URL`. Do not edit the reference
 `ai_cms` project to work on this copy.
 
-Set a secret before starting the API. There is no default JWT secret, and the
-application exits if `JWT_SECRET` is missing. For local Docker Compose use,
-create a `.env` file in this directory and set `JWT_SECRET` to a randomly
-generated value (for example, generate one with `openssl rand -base64 32`).
-Do not commit `.env` or use a predictable value.
+## Troubleshooting
 
-The API issues JWTs that expire after 15 minutes. A role change therefore takes
-effect for existing tokens no later than their expiration; users must sign in
-again to receive a token with their updated role.
-
-Copy `.env.example` to `.env` and replace every `replace-with-...` value with
-fresh random credentials before starting the services. Compose requires
-`MYSQL_PASSWORD` and `MYSQL_ROOT_PASSWORD`; the API also reads `DB_DSN` when
-run directly outside Compose. Never commit `.env`. If a credential was
-previously committed, treat it as compromised and rotate it in the database
-and every service that uses it; removing the file from a new commit does not
-remove it from Git history.
-
-`CORS_ALLOWED_ORIGINS` is a comma-separated list. Next.js public environment
-values are embedded during image build, so rebuild the web service after
-changing `NEXT_PUBLIC_API_URL`.
-
-On a database with no admin account, configure `INITIAL_ADMIN_EMAIL` and
-`INITIAL_ADMIN_PASSWORD` in a local `.env` file before starting Compose. The API
-creates this root admin once; later starts do not change its credentials or
-role. Public registrations remain authors. Choose a strong password and do not
-commit the `.env` file. Existing databases with admin accounts can start without
-these bootstrap variables; their oldest admin is protected as the root admin.
+- **The API exits right after the first start with `connection refused`.** MySQL was
+  still initialising. Run `docker compose up -d` again.
+- **The build fails at the `gofmt` step (Windows).** Go files were checked out with
+  CRLF line endings. The repository has a `.gitattributes` that forces LF for
+  `*.go`, so clone with `-b main` as shown above. For an existing clone, run
+  `git rm --cached -r . && git reset --hard` (this discards uncommitted changes).
+- **`required variable ... is missing a value`.** Create `.env` from `.env.example`
+  as described in the quick start.
+- **The API starts but the post list is empty after a while.** Your browser still
+  holds an expired token. Sign out and sign in again, or clear `token` from the
+  browser's local storage.
 
 ## Layer responsibilities
 
@@ -65,6 +107,11 @@ Domain entities do not contain JSON or GORM tags. API representation is mapped
 in Delivery, while database representation and conversion are handled in
 Infrastructure. Use cases orchestrate workflows; entity methods enforce core
 rules such as valid roles, post updates, and moderation transitions.
+
+## Tests
+
+Run the unit tests with `go test ./...`. The Docker build also checks `gofmt` and
+runs the tests before building the server.
 
 Post slug uniqueness integration tests require a disposable MySQL 8.4 instance
 and `MYSQL_TEST_DSN` with permission to create and drop databases. The tests
