@@ -59,18 +59,15 @@ func (uc *PostUseCase) GetPostByID(id uint, userRole string, userID uint) (*doma
 
 func (uc *PostUseCase) CreatePost(userID uint, userRole string, input CreatePostDTO, ipAddress string) (*domain.Post, error) {
 	role := domain.UserRole(userRole)
-	if role != domain.UserRoleAdmin && role != domain.UserRoleEditor && role != domain.UserRoleAuthor {
+	if !role.IsValid() {
 		return nil, domain.ErrInvalidRole
 	}
 	status := domain.PostStatus(input.Status)
 	if status == "" {
 		status = domain.PostStatusDraft
 	}
-	if status == domain.PostStatusPublished && !role.CanPublishDirectly() {
-		return nil, domain.ErrPublishNotAllowed
-	}
-	if !role.CanSubmitPostStatus(status) {
-		return nil, domain.ErrPostStatusNotAllowed
+	if err := role.EnsureCanSetPostStatus(status); err != nil {
+		return nil, err
 	}
 	post, err := domain.NewPost(input.Title, input.Slug, input.Content, status, input.CategoryID, userID)
 	if err != nil {
@@ -111,11 +108,8 @@ func (uc *PostUseCase) UpdatePost(id, userID uint, userRole string, input Create
 		}
 		requestedStatus := domain.PostStatus(input.Status)
 		if requestedStatus != "" {
-			if requestedStatus == domain.PostStatusPublished && !role.CanPublishDirectly() {
-				return domain.ErrPublishNotAllowed
-			}
-			if !role.CanSubmitPostStatus(requestedStatus) {
-				return domain.ErrPostStatusNotAllowed
+			if err := role.EnsureCanSetPostStatus(requestedStatus); err != nil {
+				return err
 			}
 		}
 		data := post.Data()

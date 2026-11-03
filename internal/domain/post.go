@@ -10,7 +10,6 @@ type PostStatus string
 const (
 	PostStatusDraft     PostStatus = "draft"
 	PostStatusReview    PostStatus = "review"
-	PostStatusApproved  PostStatus = "approved"
 	PostStatusRejected  PostStatus = "rejected"
 	PostStatusPublished PostStatus = "published"
 )
@@ -198,7 +197,7 @@ func (p *Post) Moderate(status PostStatus, reason string, moderatorID uint, at t
 
 func isValidPostStatus(status PostStatus) bool {
 	switch status {
-	case PostStatusDraft, PostStatusReview, PostStatusApproved, PostStatusRejected, PostStatusPublished:
+	case PostStatusDraft, PostStatusReview, PostStatusRejected, PostStatusPublished:
 		return true
 	default:
 		return false

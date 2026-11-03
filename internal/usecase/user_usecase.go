@@ -155,13 +155,8 @@ func (uc *UserUseCase) UpdateUserRole(currentUserID, targetUserID uint, newRole,
 	if currentUserID == targetUserID {
 		return domain.ErrCannotChangeOwnRole
 	}
-	switch newRole {
-	case "admin", "editor", "author":
-	default:
-		return domain.ErrInvalidRole
-	}
 	role := domain.UserRole(newRole)
-	if role != domain.UserRoleAdmin && role != domain.UserRoleEditor && role != domain.UserRoleAuthor {
+	if !role.IsValid() {
 		return domain.ErrInvalidRole
 	}
 	if err := uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {

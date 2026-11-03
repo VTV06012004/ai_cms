@@ -79,3 +79,34 @@ func TestUserDataIsDetachedFromEntity(t *testing.T) {
 		t.Fatal("modifying exported data changed the user entity")
 	}
 }
+
+func TestUserRoleIsValid(t *testing.T) {
+	for _, role := range []UserRole{UserRoleAdmin, UserRoleEditor, UserRoleAuthor} {
+		if !role.IsValid() {
+			t.Errorf("%q should be valid", role)
+		}
+	}
+	for _, role := range []UserRole{"", "owner", "ADMIN"} {
+		if role.IsValid() {
+			t.Errorf("%q should be invalid", role)
+		}
+	}
+}
+
+func TestEnsureCanSetPostStatus(t *testing.T) {
+	if err := UserRoleAuthor.EnsureCanSetPostStatus(PostStatusPublished); !errors.Is(err, ErrPublishNotAllowed) {
+		t.Errorf("author publishing: got %v, want ErrPublishNotAllowed", err)
+	}
+	if err := UserRoleAuthor.EnsureCanSetPostStatus(PostStatusRejected); !errors.Is(err, ErrPostStatusNotAllowed) {
+		t.Errorf("author rejecting: got %v, want ErrPostStatusNotAllowed", err)
+	}
+	if err := UserRoleAdmin.EnsureCanSetPostStatus(PostStatus("approved")); !errors.Is(err, ErrPostStatusNotAllowed) {
+		t.Errorf("removed status: got %v, want ErrPostStatusNotAllowed", err)
+	}
+	if err := UserRoleEditor.EnsureCanSetPostStatus(PostStatusPublished); err != nil {
+		t.Errorf("editor publishing: got %v", err)
+	}
+	if err := UserRoleAuthor.EnsureCanSetPostStatus(PostStatusReview); err != nil {
+		t.Errorf("author submitting for review: got %v", err)
+	}
+}

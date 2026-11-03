@@ -65,7 +65,6 @@ type User struct {
 	passwordHash string
 	name         string
 	role         UserRole
-	canApprove   bool
 	rootAdmin    bool
 	createdAt    time.Time
 	updatedAt    time.Time
@@ -77,7 +76,6 @@ type UserData struct {
 	PasswordHash string
 	Name         string
 	Role         UserRole
-	CanApprove   bool
 	RootAdmin    bool
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
@@ -116,7 +114,7 @@ func NewRootAdminUser(name, email, passwordHash string) (*User, error) {
 func ReconstituteUser(data UserData) *User {
 	return &User{
 		id: data.ID, email: data.Email, passwordHash: data.PasswordHash,
-		name: data.Name, role: data.Role, canApprove: data.CanApprove, rootAdmin: data.RootAdmin,
+		name: data.Name, role: data.Role, rootAdmin: data.RootAdmin,
 		createdAt: data.CreatedAt, updatedAt: data.UpdatedAt,
 	}
 }
@@ -124,7 +122,7 @@ func ReconstituteUser(data UserData) *User {
 func (u *User) Data() UserData {
 	return UserData{
 		ID: u.id, Email: u.email, PasswordHash: u.passwordHash,
-		Name: u.name, Role: u.role, CanApprove: u.canApprove, RootAdmin: u.rootAdmin,
+		Name: u.name, Role: u.role, RootAdmin: u.rootAdmin,
 		CreatedAt: u.createdAt, UpdatedAt: u.updatedAt,
 	}
 }
@@ -140,11 +138,9 @@ func (u *User) ChangeRole(role UserRole) error {
 	if u.rootAdmin {
 		return ErrCannotChangeRootAdmin
 	}
-	switch role {
-	case UserRoleAdmin, UserRoleEditor, UserRoleAuthor:
-		u.role = role
-		return nil
-	default:
+	if !role.IsValid() {
 		return ErrInvalidRole
 	}
+	u.role = role
+	return nil
 }
