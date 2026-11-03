@@ -75,7 +75,7 @@ func (h *MenuHandler) Delete(c *gin.Context) {
 	userID, _ := userIDValue.(uint)
 
 	if err := h.useCase.DeleteMenu(userID, uint(id), c.ClientIP()); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		writeError(c, err)
 		return
 	}
 

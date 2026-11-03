@@ -27,6 +27,9 @@ export default function AuditLogsPage() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -175,6 +178,17 @@ export default function AuditLogsPage() {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+        {page < totalPages && (
+          <div className="flex justify-center mt-6">
+            <button
+              onClick={handleLoadMore}
+              disabled={loadingMore}
+              className="px-6 py-2 bg-white border rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              {loadingMore ? 'Đang tải...' : 'Tải thêm'}
+            </button>
           </div>
         )}
       </div>
