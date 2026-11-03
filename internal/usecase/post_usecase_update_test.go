@@ -18,8 +18,8 @@ type postUpdateRepository struct {
 	post *domain.Post
 }
 
-func (r *postUpdateRepository) GetAll(domain.PostListCriteria) ([]domain.Post, error) {
-	return nil, nil
+func (r *postUpdateRepository) GetAll(domain.PostListCriteria, domain.PageRequest) ([]domain.Post, int64, error) {
+	return nil, 0, nil
 }
 
 func (r *postUpdateRepository) GetByID(uint) (*domain.Post, error) {
@@ -55,7 +55,9 @@ type postUpdateAuditRepository struct{}
 func (postUpdateAuditRepository) RecordLog(uint, string, string, string, string) error {
 	return nil
 }
-func (postUpdateAuditRepository) GetAll() ([]domain.AuditLog, error) { return nil, nil }
+func (postUpdateAuditRepository) GetAll(domain.PageRequest) ([]domain.AuditLog, int64, error) {
+	return nil, 0, nil
+}
 
 func TestUpdatePostWithoutStatusPreservesPublishedStatus(t *testing.T) {
 	posts := &postUpdateRepository{post: domain.ReconstitutePost(domain.PostData{

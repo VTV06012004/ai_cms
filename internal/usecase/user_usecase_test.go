@@ -51,12 +51,12 @@ func (r *userRepositoryStub) GetByID(id uint) (*domain.User, error) {
 	return user, nil
 }
 
-func (r *userRepositoryStub) GetAll() ([]domain.User, error) {
+func (r *userRepositoryStub) GetAll(_ domain.PageRequest) ([]domain.User, int64, error) {
 	users := make([]domain.User, 0, len(r.users))
 	for _, user := range r.users {
 		users = append(users, *user)
 	}
-	return users, nil
+	return users, int64(len(users)), nil
 }
 
 func (r *userRepositoryStub) CountByRole(role domain.UserRole) (int64, error) {
@@ -86,8 +86,8 @@ func (r *auditRepositoryStub) RecordLog(_ uint, action, _, _, _ string) error {
 	return nil
 }
 
-func (*auditRepositoryStub) GetAll() ([]domain.AuditLog, error) {
-	return nil, nil
+func (*auditRepositoryStub) GetAll(domain.PageRequest) ([]domain.AuditLog, int64, error) {
+	return nil, 0, nil
 }
 
 type unitOfWorkStub struct {

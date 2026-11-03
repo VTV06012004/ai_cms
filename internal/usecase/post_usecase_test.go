@@ -13,9 +13,9 @@ type postRepositoryStub struct {
 	post     *domain.Post
 }
 
-func (r *postRepositoryStub) GetAll(criteria domain.PostListCriteria) ([]domain.Post, error) {
+func (r *postRepositoryStub) GetAll(criteria domain.PostListCriteria, _ domain.PageRequest) ([]domain.Post, int64, error) {
 	r.criteria = criteria
-	return r.posts, nil
+	return r.posts, int64(len(r.posts)), nil
 }
 
 func (r *postRepositoryStub) GetByID(uint) (*domain.Post, error) {
@@ -41,7 +41,7 @@ func TestGetAllPostsRestrictsAnonymousUsersToPublished(t *testing.T) {
 	repository := &postRepositoryStub{}
 	useCase := NewPostUseCase(repository, nil)
 
-	if _, err := useCase.GetAllPosts("", 0); err != nil {
+	if _, _, err := useCase.GetAllPosts("", 0, domain.NewPageRequest(1, 20)); err != nil {
 		t.Fatalf("GetAllPosts returned error: %v", err)
 	}
 	if !repository.criteria.PublishedOnly {
@@ -76,7 +76,7 @@ func TestGetAllPostsKeepsAuthenticatedVisibility(t *testing.T) {
 			repository := &postRepositoryStub{}
 			useCase := NewPostUseCase(repository, nil)
 
-			if _, err := useCase.GetAllPosts(test.role, test.userID); err != nil {
+			if _, _, err := useCase.GetAllPosts(test.role, test.userID, domain.NewPageRequest(1, 20)); err != nil {
 				t.Fatalf("GetAllPosts returned error: %v", err)
 			}
 			if repository.criteria != test.want {

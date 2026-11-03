@@ -12,8 +12,8 @@ type revisionPostRepositoryStub struct {
 	err  error
 }
 
-func (r revisionPostRepositoryStub) GetAll(domain.PostListCriteria) ([]domain.Post, error) {
-	return nil, nil
+func (r revisionPostRepositoryStub) GetAll(domain.PostListCriteria, domain.PageRequest) ([]domain.Post, int64, error) {
+	return nil, 0, nil
 }
 
 func (r revisionPostRepositoryStub) GetByID(uint) (*domain.Post, error) {

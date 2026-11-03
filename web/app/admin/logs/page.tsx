@@ -45,12 +45,12 @@ export default function AuditLogsPage() {
         }
 
         const res = await axios.get(apiUrl('audit-logs'), {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
+          params: { page: 1, per_page: 20 },
         });
 
         setLogs(res.data.data || []);
+        setTotalPages(res.data.pagination?.total_pages ?? 1);
       } catch (err: any) {
         console.error('Lỗi lấy danh sách Audit Logs:', err);
         if (err.response?.status === 403) {
@@ -65,6 +65,24 @@ export default function AuditLogsPage() {
 
     fetchAuditLogs();
   }, [router]);
+
+  const handleLoadMore = async () => {
+    setLoadingMore(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(apiUrl('audit-logs'), {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { page: page + 1, per_page: 20 },
+      });
+      setLogs((prev) => [...prev, ...(res.data.data || [])]);
+      setPage(page + 1);
+      setTotalPages(res.data.pagination?.total_pages ?? totalPages);
+    } catch (err) {
+      console.error('Lỗi tải thêm nhật ký:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 text-gray-800">

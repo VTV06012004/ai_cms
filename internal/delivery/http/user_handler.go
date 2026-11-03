@@ -18,7 +18,7 @@ func NewUserHandler(uc *usecase.UserUseCase) *UserHandler {
 }
 
 func (h *UserHandler) GetAllUsers(c *gin.Context) {
-	users, err := h.useCase.GetAllUsers()
+	users, info, err := h.useCase.GetAllUsers(parsePage(c))
 	if err != nil {
 		writeError(c, err)
 		return
@@ -27,7 +27,7 @@ func (h *UserHandler) GetAllUsers(c *gin.Context) {
 	for _, user := range users {
 		responses = append(responses, toUserResponse(user))
 	}
-	c.JSON(http.StatusOK, gin.H{"data": responses})
+	c.JSON(http.StatusOK, gin.H{"data": responses, "pagination": toPaginationResponse(info)})
 }
 
 func (h *UserHandler) UpdateRole(c *gin.Context) {

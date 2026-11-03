@@ -143,8 +143,12 @@ func (uc *UserUseCase) Login(input LoginDTO, ipAddress string) (*LoginResponse, 
 	return &LoginResponse{Token: token, User: *domain.ReconstituteUser(userData)}, nil
 }
 
-func (uc *UserUseCase) GetAllUsers() ([]domain.User, error) {
-	return uc.userRepo.GetAll()
+func (uc *UserUseCase) GetAllUsers(page domain.PageRequest) ([]domain.User, domain.PageInfo, error) {
+	users, total, err := uc.userRepo.GetAll(page)
+	if err != nil {
+		return nil, domain.PageInfo{}, err
+	}
+	return users, page.Info(total), nil
 }
 
 func (uc *UserUseCase) UpdateUserRole(currentUserID, targetUserID uint, newRole, ipAddress string) error {

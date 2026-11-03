@@ -10,13 +10,13 @@ type UserRepository interface {
 	Create(user *User) (*User, error)
 	GetByEmail(email string) (*User, error)
 	GetByID(id uint) (*User, error)
-	GetAll() ([]User, error)
+	GetAll(page PageRequest) ([]User, int64, error)
 	CountByRole(role UserRole) (int64, error)
 	UpdateRole(userID uint, newRole string) error
 }
 
 type PostRepository interface {
-	GetAll(criteria PostListCriteria) ([]Post, error)
+	GetAll(criteria PostListCriteria, page PageRequest) ([]Post, int64, error)
 	GetByID(id uint) (*Post, error)
 	Create(post *Post, tagIDs []uint) (*Post, error)
 	Update(post *Post, tagIDs []uint) (*Post, error)
@@ -48,5 +48,5 @@ type RevisionRepository interface {
 
 type AuditRepository interface {
 	RecordLog(userID uint, action, target, details, ipAddress string) error
-	GetAll() ([]AuditLog, error)
+	GetAll(page PageRequest) ([]AuditLog, int64, error)
 }

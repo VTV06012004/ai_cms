@@ -54,9 +54,11 @@ export default function PostsPage() {
   // 👈 Cho phép chọn 'all', id chuyên mục, hoặc 'my-posts'
   const [selectedCategory, setSelectedCategory] = useState<number | 'all' | 'my-posts'>('all');
   const [loading, setLoading] = useState<boolean>(true);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [previewPost, setPreviewPost] = useState<Post | null>(null);
-
   const router = useRouter();
 
   useEffect(() => {
@@ -80,11 +82,12 @@ export default function PostsPage() {
         const token = localStorage.getItem('token');
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
         const [postsRes, catRes] = await Promise.all([
-          axios.get(apiUrl('posts'), { headers }),
+          axios.get(apiUrl('posts'), { headers, params: { page: 1, per_page: 20 } }),
           axios.get(apiUrl('categories'))
         ]);
 
-        setPosts(postsRes.data.data || postsRes.data || []);
+        setPosts(postsRes.data.data || []);
+        setTotalPages(postsRes.data.pagination?.total_pages ?? 1);
         setCategories(catRes.data.data || catRes.data || []);
       } catch (err) {
         console.error('Lỗi khi tải dữ liệu bài viết:', err);
@@ -462,6 +465,17 @@ export default function PostsPage() {
                 </div>
               );
             })}
+          </div>
+        )}
+        {!loading && page < totalPages && (
+          <div className="flex justify-center mt-8">
+            <button
+              onClick={handleLoadMore}
+              disabled={loadingMore}
+              className="px-6 py-2 bg-white border rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              {loadingMore ? 'Đang tải...' : 'Tải thêm bài viết'}
+            </button>
           </div>
         )}
       </main>

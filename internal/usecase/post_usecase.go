@@ -25,7 +25,7 @@ type CreatePostDTO struct {
 	TagIDs     []uint
 }
 
-func (uc *PostUseCase) GetAllPosts(userRole string, userID uint) ([]domain.Post, error) {
+func (uc *PostUseCase) GetAllPosts(userRole string, userID uint, page domain.PageRequest) ([]domain.Post, domain.PageInfo, error) {
 	criteria := domain.PostListCriteria{PublishedOnly: true}
 	switch domain.UserRole(userRole) {
 	case domain.UserRoleAdmin, domain.UserRoleEditor:
@@ -38,7 +38,11 @@ func (uc *PostUseCase) GetAllPosts(userRole string, userID uint) ([]domain.Post,
 		criteria.IncludePublished = true
 		criteria.PublishedOnly = false
 	}
-	return uc.postRepo.GetAll(criteria)
+	posts, total, err := uc.postRepo.GetAll(criteria, page)
+	if err != nil {
+		return nil, domain.PageInfo{}, err
+	}
+	return posts, page.Info(total), nil
 }
 
 func (uc *PostUseCase) GetPostByID(id uint, userRole string, userID uint) (*domain.Post, error) {

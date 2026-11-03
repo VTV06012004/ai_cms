@@ -56,17 +56,24 @@ func (r *UserRepository) GetByID(id uint) (*domain.User, error) {
 	return userModelToDomain(user), nil
 }
 
-func (r *UserRepository) GetAll() ([]domain.User, error) {
+func (r *UserRepository) GetAll(page domain.PageRequest) ([]domain.User, int64, error) {
+	var total int64
+	if err := r.db.Model(&UserModel{}).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
 	var users []UserModel
-	err := r.db.Select("id", "name", "email", "role", "created_at").Find(&users).Error
+	err := r.db.Select("id", "name", "email", "role", "created_at").
+		Order("id ASC").
+		Limit(page.PerPage).Offset(page.Offset()).
+		Find(&users).Error
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	result := make([]domain.User, 0, len(users))
 	for _, user := range users {
 		result = append(result, user.ToDomain())
 	}
-	return result, nil
+	return result, total, nil
 }
 
 func (r *UserRepository) CountByRole(role domain.UserRole) (int64, error) {

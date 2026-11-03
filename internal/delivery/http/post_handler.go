@@ -24,12 +24,12 @@ func (h *PostHandler) GetAll(c *gin.Context) {
 	userIDValue, _ := c.Get("user_id")
 	userID, _ := userIDValue.(uint)
 
-	posts, err := h.useCase.GetAllPosts(userRole, userID)
+	posts, info, err := h.useCase.GetAllPosts(userRole, userID, parsePage(c))
 	if err != nil {
 		writeError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": toPostResponses(posts)})
+	c.JSON(http.StatusOK, gin.H{"data": toPostResponses(posts), "pagination": toPaginationResponse(info)})
 }
 
 func (h *PostHandler) GetByID(c *gin.Context) {
