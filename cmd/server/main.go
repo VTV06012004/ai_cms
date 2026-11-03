@@ -4,8 +4,8 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 
+	"api/internal/config"
 	delivery "api/internal/delivery/http"
 	"api/internal/infrastructure/database"
 	"api/internal/infrastructure/persistence"
@@ -24,12 +24,16 @@ func main() {
 }
 
 func run() error {
-	credentials, err := security.NewCredentials(os.Getenv("JWT_SECRET"))
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	credentials, err := security.NewCredentials(cfg.JWTSecret)
 	if err != nil {
 		return err
 	}
 
-	db, err := database.NewMySQLConnection()
+	db, err := database.NewMySQLConnection(cfg.DatabaseDSN)
 	if err != nil {
 		return err
 	}
@@ -65,9 +69,9 @@ func run() error {
 	unitOfWork := persistence.NewUnitOfWork(db)
 	userUC := usecase.NewUserUseCase(userRepo, credentials, unitOfWork)
 	if err := userUC.EnsureInitialAdmin(usecase.InitialAdminConfig{
-		Name:     os.Getenv("INITIAL_ADMIN_NAME"),
-		Email:    os.Getenv("INITIAL_ADMIN_EMAIL"),
-		Password: os.Getenv("INITIAL_ADMIN_PASSWORD"),
+		Name:     cfg.InitialAdmin.Name,
+		Email:    cfg.InitialAdmin.Email,
+		Password: cfg.InitialAdmin.Password,
 	}); err != nil {
 		return err
 	}
@@ -80,7 +84,7 @@ func run() error {
 	mediaUC := usecase.NewMediaUseCase(storage.NewLocalFileStorage("uploads"))
 
 	router := gin.Default()
-	router.Use(corsMiddleware())
+	router.Use(corsMiddleware(cfg.CORSAllowedOrigins))
 	delivery.RegisterRoutes(
 		router,
 		credentials,
@@ -95,8 +99,8 @@ func run() error {
 		delivery.NewUserHandler(userUC),
 	)
 
-	log.Println("Backend đang chạy tại cổng 8080...")
-	return router.Run("0.0.0.0:8080")
+	log.Printf("Backend đang chạy tại cổng %s...", cfg.Port)
+	return router.Run("0.0.0.0:" + cfg.Port)
 }
 
 func protectExistingAdmin(db *gorm.DB) error {
@@ -169,18 +173,10 @@ func seedDefaults(db *gorm.DB) error {
 	return nil
 }
 
-func corsMiddleware() gin.HandlerFunc {
-	allowedOrigins := map[string]struct{}{
-		"http://localhost:3000": {},
-		"http://localhost:3001": {},
-	}
-	if configuredOrigins := os.Getenv("CORS_ALLOWED_ORIGINS"); configuredOrigins != "" {
-		allowedOrigins = make(map[string]struct{})
-		for _, origin := range strings.Split(configuredOrigins, ",") {
-			if origin = strings.TrimSpace(origin); origin != "" {
-				allowedOrigins[origin] = struct{}{}
-			}
-		}
+func corsMiddleware(origins []string) gin.HandlerFunc {
+	allowedOrigins := make(map[string]struct{}, len(origins))
+	for _, origin := range origins {
+		allowedOrigins[origin] = struct{}{}
 	}
 
 	return func(c *gin.Context) {
