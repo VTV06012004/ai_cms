@@ -24,6 +24,15 @@ func NewEmail(value string) (Email, error) {
 	return Email(value), nil
 }
 
+func (role UserRole) IsValid() bool {
+	switch role {
+	case UserRoleAdmin, UserRoleEditor, UserRoleAuthor:
+		return true
+	default:
+		return false
+	}
+}
+
 func (role UserRole) CanPublishDirectly() bool {
 	return role == UserRoleAdmin || role == UserRoleEditor
 }
@@ -31,12 +40,23 @@ func (role UserRole) CanPublishDirectly() bool {
 func (role UserRole) CanSubmitPostStatus(status PostStatus) bool {
 	switch status {
 	case PostStatusDraft, PostStatusReview:
-		return role == UserRoleAdmin || role == UserRoleEditor || role == UserRoleAuthor
+		return role.IsValid()
 	case PostStatusPublished:
 		return role.CanPublishDirectly()
 	default:
 		return false
 	}
+}
+
+// EnsureCanSetPostStatus là nơi duy nhất quyết định vai trò nào được đặt trạng thái nào cho bài viết.
+func (role UserRole) EnsureCanSetPostStatus(status PostStatus) error {
+	if status == PostStatusPublished && !role.CanPublishDirectly() {
+		return ErrPublishNotAllowed
+	}
+	if !role.CanSubmitPostStatus(status) {
+		return ErrPostStatusNotAllowed
+	}
+	return nil
 }
 
 type User struct {
