@@ -1,9 +1,15 @@
 package main
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"api/internal/config"
 	delivery "api/internal/delivery/http"
@@ -99,8 +105,41 @@ func run() error {
 		delivery.NewUserHandler(userUC),
 	)
 
-	log.Printf("Backend đang chạy tại cổng %s...", cfg.Port)
-	return router.Run("0.0.0.0:" + cfg.Port)
+	server := &http.Server{
+		Addr:              "0.0.0.0:" + cfg.Port,
+		Handler:           router,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	// Nhận Ctrl+C hoặc tín hiệu dừng của Docker (SIGTERM).
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	serverErr := make(chan error, 1)
+	go func() {
+		log.Printf("Backend đang chạy tại cổng %s...", cfg.Port)
+		serverErr <- server.ListenAndServe()
+	}()
+
+	select {
+	case err := <-serverErr:
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	case <-ctx.Done():
+	}
+	stop()
+	log.Println("Nhận tín hiệu dừng, đang tắt server...")
+
+	// Cho các request đang xử lý tối đa 15 giây để hoàn tất.
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		return fmt.Errorf("tắt server không thành công: %w", err)
+	}
+	log.Println("Server đã tắt an toàn.")
+	return nil
 }
 
 func protectExistingAdmin(db *gorm.DB) error {
