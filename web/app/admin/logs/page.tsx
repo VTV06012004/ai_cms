@@ -77,7 +77,7 @@ export default function AuditLogsPage() {
         headers: { Authorization: `Bearer ${token}` },
         params: { page: page + 1, per_page: 20 },
       });
-      setLogs((prev) => [...prev, ...(res.data.data || [])]);
+      setLogs((prev: AuditLog[]) => [...prev, ...(res.data.data || [])]);
       setPage(page + 1);
       setTotalPages(res.data.pagination?.total_pages ?? totalPages);
     } catch (err) {

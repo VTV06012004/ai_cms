@@ -62,7 +62,7 @@ export default function AdminUsersPage() {
         headers: { Authorization: `Bearer ${token}` },
         params: { page: page + 1, per_page: 20 },
       });
-      setUsers((prev) => [...prev, ...(res.data.data || [])]);
+      setUsers((prev: User[]) => [...prev, ...(res.data.data || [])]);
       setPage(page + 1);
       setTotalPages(res.data.pagination?.total_pages ?? totalPages);
     } catch (err) {

@@ -99,6 +99,24 @@ export default function PostsPage() {
     fetchData();
   }, []);
 
+  const handleLoadMore = async () => {
+    setLoadingMore(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(apiUrl('posts'), {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        params: { page: page + 1, per_page: 20 },
+      });
+      setPosts((prev: Post[]) => [...prev, ...(res.data.data || [])]);
+      setPage(page + 1);
+      setTotalPages(res.data.pagination?.total_pages ?? totalPages);
+    } catch (err) {
+      console.error('Lỗi khi tải thêm bài viết:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('userRole');
