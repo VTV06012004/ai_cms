@@ -135,3 +135,10 @@ func TestPostDataIsDetachedFromEntity(t *testing.T) {
 		t.Fatal("modifying exported related data changed the post entity")
 	}
 }
+
+func TestNewPostRejectsRemovedApprovedStatus(t *testing.T) {
+	_, err := NewPost("Title", "slug", "content", PostStatus("approved"), 1, 1)
+	if !errors.Is(err, ErrInvalidPostStatus) {
+		t.Fatalf("expected ErrInvalidPostStatus, got %v", err)
+	}
+}

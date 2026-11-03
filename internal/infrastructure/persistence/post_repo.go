@@ -19,32 +19,44 @@ func NewPostRepository(db *gorm.DB) domain.PostRepository {
 	return &PostRepository{db: db}
 }
 
-func (r *PostRepository) GetAll(criteria domain.PostListCriteria) ([]domain.Post, error) {
-	var posts []PostModel
-	query := r.db.Preload("Author").Preload("Category").Preload("Tags")
+func (r *PostRepository) GetAll(criteria domain.PostListCriteria, page domain.PageRequest) ([]domain.Post, int64, error) {
+	filtered := r.db.Model(&PostModel{})
 	if criteria.AuthorID > 0 {
 		if criteria.IncludePublished {
-			query = query.Where("author_id = ? OR status = ?", criteria.AuthorID, domain.PostStatusPublished)
+			filtered = filtered.Where("author_id = ? OR status = ?", criteria.AuthorID, domain.PostStatusPublished)
 		} else {
-			query = query.Where("author_id = ?", criteria.AuthorID)
+			filtered = filtered.Where("author_id = ?", criteria.AuthorID)
 		}
 	} else if criteria.PublishedOnly {
-		query = query.Where("status = ?", domain.PostStatusPublished)
+		filtered = filtered.Where("status = ?", domain.PostStatusPublished)
 	}
-	if err := query.Order("created_at DESC").Find(&posts).Error; err != nil {
-		return nil, err
+	// Session để dùng lại cùng bộ lọc cho cả Count và Find.
+	filtered = filtered.Session(&gorm.Session{})
+
+	var total int64
+	if err := filtered.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var posts []PostModel
+	err := filtered.Preload("Author").Preload("Category").Preload("Tags").
+		Order("created_at DESC, id DESC").
+		Limit(page.PerPage).Offset(page.Offset()).
+		Find(&posts).Error
+	if err != nil {
+		return nil, 0, err
 	}
 	result := make([]domain.Post, 0, len(posts))
 	for _, post := range posts {
 		result = append(result, post.ToDomain())
 	}
-	return result, nil
+	return result, total, nil
 }
 
 func (r *PostRepository) GetByID(id uint) (*domain.Post, error) {
 	var post PostModel
 	if err := r.db.Preload("Author").Preload("Category").Preload("Tags").First(&post, id).Error; err != nil {
-		return nil, err
+		return nil, notFoundOr(err, domain.ErrPostNotFound)
 	}
 	result := post.ToDomain()
 	return &result, nil

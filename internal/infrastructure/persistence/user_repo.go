@@ -29,6 +29,9 @@ func (r *UserRepository) Create(user *domain.User) (*domain.User, error) {
 		RootAdminKey: rootAdminKey,
 	}
 	if err := r.db.Create(&model).Error; err != nil {
+		if isDuplicateKey(err, "email") {
+			return nil, domain.ErrEmailAlreadyExists
+		}
 		return nil, err
 	}
 	created := model.ToDomain()
@@ -39,7 +42,7 @@ func (r *UserRepository) GetByEmail(email string) (*domain.User, error) {
 	var user UserModel
 	err := r.db.Where("email = ?", email).First(&user).Error
 	if err != nil {
-		return nil, err
+		return nil, notFoundOr(err, domain.ErrUserNotFound)
 	}
 	return userModelToDomain(user), nil
 }
@@ -48,22 +51,29 @@ func (r *UserRepository) GetByID(id uint) (*domain.User, error) {
 	var user UserModel
 	err := r.db.First(&user, id).Error
 	if err != nil {
-		return nil, err
+		return nil, notFoundOr(err, domain.ErrUserNotFound)
 	}
 	return userModelToDomain(user), nil
 }
 
-func (r *UserRepository) GetAll() ([]domain.User, error) {
+func (r *UserRepository) GetAll(page domain.PageRequest) ([]domain.User, int64, error) {
+	var total int64
+	if err := r.db.Model(&UserModel{}).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
 	var users []UserModel
-	err := r.db.Select("id", "name", "email", "role", "created_at").Find(&users).Error
+	err := r.db.Select("id", "name", "email", "role", "created_at").
+		Order("id ASC").
+		Limit(page.PerPage).Offset(page.Offset()).
+		Find(&users).Error
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	result := make([]domain.User, 0, len(users))
 	for _, user := range users {
 		result = append(result, user.ToDomain())
 	}
-	return result, nil
+	return result, total, nil
 }
 
 func (r *UserRepository) CountByRole(role domain.UserRole) (int64, error) {
@@ -83,7 +93,7 @@ func (r *UserRepository) UpdateRole(userID uint, newRole string) error {
 			return err
 		}
 		if users == 0 {
-			return gorm.ErrRecordNotFound
+			return domain.ErrUserNotFound
 		}
 	}
 	return nil

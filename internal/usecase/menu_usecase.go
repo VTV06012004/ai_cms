@@ -80,7 +80,7 @@ func (uc *MenuUseCase) DeleteMenu(userID, menuID uint, ipAddress string) error {
 	return uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
 		menu, err := repositories.Menus.GetByID(menuID)
 		if err != nil {
-			return fmt.Errorf("không tìm thấy menu: %w", err)
+			return err
 		}
 		menuData := menu.Data()
 		if err := repositories.Menus.Delete(menuID); err != nil {

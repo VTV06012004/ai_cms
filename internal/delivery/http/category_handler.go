@@ -18,7 +18,7 @@ func NewCategoryHandler(uc *usecase.CategoryUseCase) *CategoryHandler {
 func (h *CategoryHandler) GetAll(c *gin.Context) {
 	categories, err := h.useCase.GetAllCategories()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lấy danh sách chuyên mục"})
+		writeError(c, err)
 		return
 	}
 	responses := make([]categoryResponse, 0, len(categories))
@@ -35,13 +35,13 @@ func (h *CategoryHandler) Create(c *gin.Context) {
 		ParentID *uint  `json:"parent_id"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		writeInvalidRequest(c)
 		return
 	}
 
 	category, err := h.useCase.CreateCategory(input.Name, input.Slug, input.ParentID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		writeError(c, err)
 		return
 	}
 

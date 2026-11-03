@@ -59,7 +59,7 @@ func (uc *UserUseCase) Register(input RegisterDTO, ipAddress string) (uint, erro
 	if err := uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
 		created, err := repositories.Users.Create(user)
 		if err != nil {
-			return fmt.Errorf("email đã tồn tại hoặc không thể tạo tài khoản: %w", err)
+			return fmt.Errorf("không thể tạo tài khoản: %w", err)
 		}
 		user = created
 		data := user.Data()
@@ -121,7 +121,10 @@ func (uc *UserUseCase) EnsureInitialAdmin(config InitialAdminConfig) error {
 func (uc *UserUseCase) Login(input LoginDTO, ipAddress string) (*LoginResponse, error) {
 	user, err := uc.userRepo.GetByEmail(input.Email)
 	if err != nil {
-		return nil, ErrInvalidCredentials
+		if errors.Is(err, domain.ErrUserNotFound) {
+			return nil, ErrInvalidCredentials
+		}
+		return nil, fmt.Errorf("không thể tìm tài khoản: %w", err)
 	}
 	userData := user.Data()
 	if !uc.credentials.CheckPasswordHash(input.Password, userData.PasswordHash) {
@@ -140,27 +143,26 @@ func (uc *UserUseCase) Login(input LoginDTO, ipAddress string) (*LoginResponse, 
 	return &LoginResponse{Token: token, User: *domain.ReconstituteUser(userData)}, nil
 }
 
-func (uc *UserUseCase) GetAllUsers() ([]domain.User, error) {
-	return uc.userRepo.GetAll()
+func (uc *UserUseCase) GetAllUsers(page domain.PageRequest) ([]domain.User, domain.PageInfo, error) {
+	users, total, err := uc.userRepo.GetAll(page)
+	if err != nil {
+		return nil, domain.PageInfo{}, err
+	}
+	return users, page.Info(total), nil
 }
 
 func (uc *UserUseCase) UpdateUserRole(currentUserID, targetUserID uint, newRole, ipAddress string) error {
 	if currentUserID == targetUserID {
 		return domain.ErrCannotChangeOwnRole
 	}
-	switch newRole {
-	case "admin", "editor", "author":
-	default:
-		return domain.ErrInvalidRole
-	}
 	role := domain.UserRole(newRole)
-	if role != domain.UserRoleAdmin && role != domain.UserRoleEditor && role != domain.UserRoleAuthor {
+	if !role.IsValid() {
 		return domain.ErrInvalidRole
 	}
 	if err := uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
 		target, err := repositories.Users.GetByID(targetUserID)
 		if err != nil {
-			return errors.New("không tìm thấy người dùng")
+			return err
 		}
 		if err := target.ChangeRole(role); err != nil {
 			return err

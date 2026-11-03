@@ -18,16 +18,16 @@ func NewUserHandler(uc *usecase.UserUseCase) *UserHandler {
 }
 
 func (h *UserHandler) GetAllUsers(c *gin.Context) {
-	users, err := h.useCase.GetAllUsers()
+	users, info, err := h.useCase.GetAllUsers(parsePage(c))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(c, err)
 		return
 	}
 	responses := make([]userResponse, 0, len(users))
 	for _, user := range users {
 		responses = append(responses, toUserResponse(user))
 	}
-	c.JSON(http.StatusOK, gin.H{"data": responses})
+	c.JSON(http.StatusOK, gin.H{"data": responses, "pagination": toPaginationResponse(info)})
 }
 
 func (h *UserHandler) UpdateRole(c *gin.Context) {
@@ -41,7 +41,7 @@ func (h *UserHandler) UpdateRole(c *gin.Context) {
 		Role string `json:"role" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		writeInvalidRequest(c)
 		return
 	}
 
@@ -49,7 +49,7 @@ func (h *UserHandler) UpdateRole(c *gin.Context) {
 	currentUserID, _ := userIDValue.(uint)
 
 	if err := h.useCase.UpdateUserRole(currentUserID, uint(id), input.Role, c.ClientIP()); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		writeError(c, err)
 		return
 	}
 

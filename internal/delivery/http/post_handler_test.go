@@ -14,7 +14,7 @@ func TestWritePostMutationErrorReturnsConflictForDuplicateSlug(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.POST("/posts", func(c *gin.Context) {
-		writePostMutationError(c, domain.ErrPostSlugAlreadyExists)
+		writeError(c, domain.ErrPostSlugAlreadyExists)
 	})
 
 	response := httptest.NewRecorder()

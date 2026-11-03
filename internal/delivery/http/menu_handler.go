@@ -19,7 +19,7 @@ func NewMenuHandler(uc *usecase.MenuUseCase) *MenuHandler {
 func (h *MenuHandler) GetAll(c *gin.Context) {
 	menus, err := h.useCase.GetAllMenus()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(c, err)
 		return
 	}
 	responses := make([]menuResponse, 0, len(menus))
@@ -42,7 +42,7 @@ func (h *MenuHandler) Create(c *gin.Context) {
 		} `json:"menu_items"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		writeInvalidRequest(c)
 		return
 	}
 	input := usecase.MenuInputDTO{Name: request.Name, Location: request.Location}
@@ -57,7 +57,7 @@ func (h *MenuHandler) Create(c *gin.Context) {
 
 	menu, err := h.useCase.CreateMenu(userID, input, c.ClientIP())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		writeError(c, err)
 		return
 	}
 
@@ -67,7 +67,7 @@ func (h *MenuHandler) Create(c *gin.Context) {
 func (h *MenuHandler) Delete(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID không hợp lệ"})
+		writeError(c, err)
 		return
 	}
 
@@ -75,7 +75,7 @@ func (h *MenuHandler) Delete(c *gin.Context) {
 	userID, _ := userIDValue.(uint)
 
 	if err := h.useCase.DeleteMenu(userID, uint(id), c.ClientIP()); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		writeError(c, err)
 		return
 	}
 

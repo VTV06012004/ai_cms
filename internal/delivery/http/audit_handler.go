@@ -16,9 +16,9 @@ func NewAuditHandler(uc *usecase.AuditUseCase) *AuditHandler {
 }
 
 func (h *AuditHandler) GetAuditLogs(c *gin.Context) {
-	logs, err := h.useCase.GetAllAuditLogs()
+	logs, info, err := h.useCase.GetAllAuditLogs(parsePage(c))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lấy danh sách nhật ký hệ thống"})
+		writeError(c, err)
 		return
 	}
 
@@ -26,5 +26,5 @@ func (h *AuditHandler) GetAuditLogs(c *gin.Context) {
 	for _, log := range logs {
 		responses = append(responses, toAuditLogResponse(log))
 	}
-	c.JSON(http.StatusOK, gin.H{"data": responses})
+	c.JSON(http.StatusOK, gin.H{"data": responses, "pagination": toPaginationResponse(info)})
 }

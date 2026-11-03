@@ -27,6 +27,9 @@ export default function AuditLogsPage() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -45,12 +48,12 @@ export default function AuditLogsPage() {
         }
 
         const res = await axios.get(apiUrl('audit-logs'), {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: { Authorization: `Bearer ${token}` },
+          params: { page: 1, per_page: 20 },
         });
 
         setLogs(res.data.data || []);
+        setTotalPages(res.data.pagination?.total_pages ?? 1);
       } catch (err: any) {
         console.error('Lỗi lấy danh sách Audit Logs:', err);
         if (err.response?.status === 403) {
@@ -65,6 +68,24 @@ export default function AuditLogsPage() {
 
     fetchAuditLogs();
   }, [router]);
+
+  const handleLoadMore = async () => {
+    setLoadingMore(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(apiUrl('audit-logs'), {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { page: page + 1, per_page: 20 },
+      });
+      setLogs((prev: AuditLog[]) => [...prev, ...(res.data.data || [])]);
+      setPage(page + 1);
+      setTotalPages(res.data.pagination?.total_pages ?? totalPages);
+    } catch (err) {
+      console.error('Lỗi tải thêm nhật ký:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 text-gray-800">
@@ -157,6 +178,17 @@ export default function AuditLogsPage() {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+        {page < totalPages && (
+          <div className="flex justify-center mt-6">
+            <button
+              onClick={handleLoadMore}
+              disabled={loadingMore}
+              className="px-6 py-2 bg-white border rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              {loadingMore ? 'Đang tải...' : 'Tải thêm'}
+            </button>
           </div>
         )}
       </div>

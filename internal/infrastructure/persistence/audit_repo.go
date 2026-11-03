@@ -26,16 +26,23 @@ func (r *AuditRepository) RecordLog(userID uint, action, target, details, ipAddr
 	return r.db.Create(&log).Error
 }
 
-func (r *AuditRepository) GetAll() ([]domain.AuditLog, error) {
-	var logs []AuditLogModel
-	if err := r.db.Preload("User").Order("created_at DESC").Find(&logs).Error; err != nil {
-		return nil, err
+func (r *AuditRepository) GetAll(page domain.PageRequest) ([]domain.AuditLog, int64, error) {
+	var total int64
+	if err := r.db.Model(&AuditLogModel{}).Count(&total).Error; err != nil {
+		return nil, 0, err
 	}
-
-	var _ domain.AuditRepository = (*AuditRepository)(nil)
+	var logs []AuditLogModel
+	err := r.db.Preload("User").Order("created_at DESC, id DESC").
+		Limit(page.PerPage).Offset(page.Offset()).
+		Find(&logs).Error
+	if err != nil {
+		return nil, 0, err
+	}
 	result := make([]domain.AuditLog, 0, len(logs))
 	for _, log := range logs {
 		result = append(result, log.ToDomain())
 	}
-	return result, nil
+	return result, total, nil
 }
+
+var _ domain.AuditRepository = (*AuditRepository)(nil)

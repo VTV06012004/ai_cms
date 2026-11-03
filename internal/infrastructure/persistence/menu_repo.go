@@ -29,7 +29,7 @@ func (r *MenuRepository) GetAll() ([]domain.Menu, error) {
 func (r *MenuRepository) GetByID(id uint) (*domain.Menu, error) {
 	var model MenuModel
 	if err := r.db.Preload("MenuItems").First(&model, id).Error; err != nil {
-		return nil, err
+		return nil, notFoundOr(err, domain.ErrMenuNotFound)
 	}
 	domainMenu := model.ToDomain()
 	return &domainMenu, nil

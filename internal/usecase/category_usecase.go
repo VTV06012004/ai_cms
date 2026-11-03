@@ -1,8 +1,6 @@
 package usecase
 
 import (
-	"errors"
-
 	"api/internal/domain"
 )
 
@@ -25,7 +23,7 @@ func (uc *CategoryUseCase) CreateCategory(name, slug string, parentID *uint) (*d
 	}
 	created, err := uc.categoryRepo.Create(category)
 	if err != nil {
-		return nil, errors.New("danh mục hoặc slug đã tồn tại")
+		return nil, err
 	}
 	return created, nil
 }

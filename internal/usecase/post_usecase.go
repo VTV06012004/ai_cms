@@ -25,7 +25,7 @@ type CreatePostDTO struct {
 	TagIDs     []uint
 }
 
-func (uc *PostUseCase) GetAllPosts(userRole string, userID uint) ([]domain.Post, error) {
+func (uc *PostUseCase) GetAllPosts(userRole string, userID uint, page domain.PageRequest) ([]domain.Post, domain.PageInfo, error) {
 	criteria := domain.PostListCriteria{PublishedOnly: true}
 	switch domain.UserRole(userRole) {
 	case domain.UserRoleAdmin, domain.UserRoleEditor:
@@ -38,7 +38,11 @@ func (uc *PostUseCase) GetAllPosts(userRole string, userID uint) ([]domain.Post,
 		criteria.IncludePublished = true
 		criteria.PublishedOnly = false
 	}
-	return uc.postRepo.GetAll(criteria)
+	posts, total, err := uc.postRepo.GetAll(criteria, page)
+	if err != nil {
+		return nil, domain.PageInfo{}, err
+	}
+	return posts, page.Info(total), nil
 }
 
 func (uc *PostUseCase) GetPostByID(id uint, userRole string, userID uint) (*domain.Post, error) {
@@ -55,18 +59,15 @@ func (uc *PostUseCase) GetPostByID(id uint, userRole string, userID uint) (*doma
 
 func (uc *PostUseCase) CreatePost(userID uint, userRole string, input CreatePostDTO, ipAddress string) (*domain.Post, error) {
 	role := domain.UserRole(userRole)
-	if role != domain.UserRoleAdmin && role != domain.UserRoleEditor && role != domain.UserRoleAuthor {
+	if !role.IsValid() {
 		return nil, domain.ErrInvalidRole
 	}
 	status := domain.PostStatus(input.Status)
 	if status == "" {
 		status = domain.PostStatusDraft
 	}
-	if status == domain.PostStatusPublished && !role.CanPublishDirectly() {
-		return nil, domain.ErrPublishNotAllowed
-	}
-	if !role.CanSubmitPostStatus(status) {
-		return nil, domain.ErrPostStatusNotAllowed
+	if err := role.EnsureCanSetPostStatus(status); err != nil {
+		return nil, err
 	}
 	post, err := domain.NewPost(input.Title, input.Slug, input.Content, status, input.CategoryID, userID)
 	if err != nil {
@@ -100,18 +101,15 @@ func (uc *PostUseCase) UpdatePost(id, userID uint, userRole string, input Create
 	err := uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
 		post, err := repositories.Posts.GetByID(id)
 		if err != nil {
-			return domain.ErrPostNotFound
+			return err
 		}
 		if !post.CanBeManagedBy(userID, role) {
 			return domain.ErrPostAccessDenied
 		}
 		requestedStatus := domain.PostStatus(input.Status)
 		if requestedStatus != "" {
-			if requestedStatus == domain.PostStatusPublished && !role.CanPublishDirectly() {
-				return domain.ErrPublishNotAllowed
-			}
-			if !role.CanSubmitPostStatus(requestedStatus) {
-				return domain.ErrPostStatusNotAllowed
+			if err := role.EnsureCanSetPostStatus(requestedStatus); err != nil {
+				return err
 			}
 		}
 		data := post.Data()
@@ -145,7 +143,7 @@ func (uc *PostUseCase) DeletePost(id, userID uint, userRole, ipAddress string) e
 	return uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
 		post, err := repositories.Posts.GetByID(id)
 		if err != nil {
-			return domain.ErrPostNotFound
+			return err
 		}
 		if !post.CanBeManagedBy(userID, role) {
 			return domain.ErrPostAccessDenied
@@ -163,7 +161,7 @@ func (uc *PostUseCase) ModeratePost(id, moderatorID uint, status, reason, ipAddr
 	err := uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
 		post, err := repositories.Posts.GetByID(id)
 		if err != nil {
-			return domain.ErrPostNotFound
+			return err
 		}
 		if err := post.Moderate(domain.PostStatus(status), reason, moderatorID, time.Now()); err != nil {
 			return err

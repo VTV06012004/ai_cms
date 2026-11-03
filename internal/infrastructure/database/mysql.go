@@ -3,16 +3,13 @@ package database
 import (
 	"fmt"
 	"log"
-	"os"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
 
-// NewMySQLConnection khởi tạo kết nối GORM tới cơ sở dữ liệu MySQL
-func NewMySQLConnection() (*gorm.DB, error) {
-	// Lấy DSN từ biến môi trường; thiếu cấu hình thì không khởi động với mật khẩu mặc định.
-	dsn := os.Getenv("DB_DSN")
+// NewMySQLConnection khởi tạo kết nối GORM tới MySQL bằng DSN đã được kiểm tra ở config.
+func NewMySQLConnection(dsn string) (*gorm.DB, error) {
 	if dsn == "" {
 		return nil, fmt.Errorf("DB_DSN is required")
 	}

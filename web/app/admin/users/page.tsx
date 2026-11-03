@@ -17,6 +17,9 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loadingMore, setLoadingMore] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -37,8 +40,10 @@ export default function AdminUsersPage() {
       try {
         const res = await axios.get(apiUrl('admin/users'), {
           headers: { Authorization: `Bearer ${token}` },
+          params: { page: 1, per_page: 20 },
         });
         setUsers(res.data.data || []);
+        setTotalPages(res.data.pagination?.total_pages ?? 1);
       } catch (err: any) {
         console.error('Lỗi tải danh sách user:', err);
       } finally {
@@ -48,6 +53,24 @@ export default function AdminUsersPage() {
 
     fetchUsers();
   }, [router]);
+
+  const handleLoadMore = async () => {
+    setLoadingMore(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(apiUrl('admin/users'), {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { page: page + 1, per_page: 20 },
+      });
+      setUsers((prev: User[]) => [...prev, ...(res.data.data || [])]);
+      setPage(page + 1);
+      setTotalPages(res.data.pagination?.total_pages ?? totalPages);
+    } catch (err) {
+      console.error('Lỗi tải thêm người dùng:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const handleRoleChange = async (userId: number, newRole: string) => {
     // Chặn tuyệt đối nếu tự đổi quyền chính mình
@@ -166,6 +189,17 @@ export default function AdminUsersPage() {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+        {page < totalPages && (
+          <div className="flex justify-center mt-6">
+            <button
+              onClick={handleLoadMore}
+              disabled={loadingMore}
+              className="px-6 py-2 bg-white border rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              {loadingMore ? 'Đang tải...' : 'Tải thêm'}
+            </button>
           </div>
         )}
       </div>

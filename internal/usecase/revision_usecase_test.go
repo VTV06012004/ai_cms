@@ -12,8 +12,8 @@ type revisionPostRepositoryStub struct {
 	err  error
 }
 
-func (r revisionPostRepositoryStub) GetAll(domain.PostListCriteria) ([]domain.Post, error) {
-	return nil, nil
+func (r revisionPostRepositoryStub) GetAll(domain.PostListCriteria, domain.PageRequest) ([]domain.Post, int64, error) {
+	return nil, 0, nil
 }
 
 func (r revisionPostRepositoryStub) GetByID(uint) (*domain.Post, error) {
@@ -105,11 +105,29 @@ func TestGetByPostIDRejectsAuthorChangingPostID(t *testing.T) {
 	}
 }
 
+func TestGetByPostIDKeepsDatabaseFailureDistinctFromNotFound(t *testing.T) {
+	databaseFailure := errors.New("database failure")
+	revisionRepo := &revisionRepositoryStub{}
+	useCase := NewRevisionUseCase(
+		revisionRepo,
+		revisionPostRepositoryStub{err: databaseFailure},
+		nil,
+	)
+
+	got, err := useCase.GetByPostID(7, 99, string(domain.UserRoleAuthor))
+	if !errors.Is(err, databaseFailure) || errors.Is(err, domain.ErrPostNotFound) {
+		t.Fatalf("expected the database failure to be returned unchanged, got %v", err)
+	}
+	if got != nil || revisionRepo.calls != 0 {
+		t.Fatal("revision data was returned or queried after a database failure")
+	}
+}
+
 func TestGetByPostIDReturnsNotFoundWithoutQueryingRevisions(t *testing.T) {
 	revisionRepo := &revisionRepositoryStub{}
 	useCase := NewRevisionUseCase(
 		revisionRepo,
-		revisionPostRepositoryStub{err: errors.New("database failure")},
+		revisionPostRepositoryStub{err: domain.ErrPostNotFound},
 		nil,
 	)
 

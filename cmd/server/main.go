@@ -1,11 +1,17 @@
 package main
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"strings"
+	"os/signal"
+	"syscall"
+	"time"
 
+	"api/internal/config"
 	delivery "api/internal/delivery/http"
 	"api/internal/infrastructure/database"
 	"api/internal/infrastructure/persistence"
@@ -24,12 +30,16 @@ func main() {
 }
 
 func run() error {
-	credentials, err := security.NewCredentials(os.Getenv("JWT_SECRET"))
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	credentials, err := security.NewCredentials(cfg.JWTSecret)
 	if err != nil {
 		return err
 	}
 
-	db, err := database.NewMySQLConnection()
+	db, err := database.NewMySQLConnection(cfg.DatabaseDSN)
 	if err != nil {
 		return err
 	}
@@ -65,9 +75,9 @@ func run() error {
 	unitOfWork := persistence.NewUnitOfWork(db)
 	userUC := usecase.NewUserUseCase(userRepo, credentials, unitOfWork)
 	if err := userUC.EnsureInitialAdmin(usecase.InitialAdminConfig{
-		Name:     os.Getenv("INITIAL_ADMIN_NAME"),
-		Email:    os.Getenv("INITIAL_ADMIN_EMAIL"),
-		Password: os.Getenv("INITIAL_ADMIN_PASSWORD"),
+		Name:     cfg.InitialAdmin.Name,
+		Email:    cfg.InitialAdmin.Email,
+		Password: cfg.InitialAdmin.Password,
 	}); err != nil {
 		return err
 	}
@@ -80,7 +90,7 @@ func run() error {
 	mediaUC := usecase.NewMediaUseCase(storage.NewLocalFileStorage("uploads"))
 
 	router := gin.Default()
-	router.Use(corsMiddleware())
+	router.Use(corsMiddleware(cfg.CORSAllowedOrigins))
 	delivery.RegisterRoutes(
 		router,
 		credentials,
@@ -95,8 +105,41 @@ func run() error {
 		delivery.NewUserHandler(userUC),
 	)
 
-	log.Println("Backend đang chạy tại cổng 8080...")
-	return router.Run("0.0.0.0:8080")
+	server := &http.Server{
+		Addr:              "0.0.0.0:" + cfg.Port,
+		Handler:           router,
+		ReadHeaderTimeout: 10 * time.Second,
+	}
+
+	// Nhận Ctrl+C hoặc tín hiệu dừng của Docker (SIGTERM).
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	serverErr := make(chan error, 1)
+	go func() {
+		log.Printf("Backend đang chạy tại cổng %s...", cfg.Port)
+		serverErr <- server.ListenAndServe()
+	}()
+
+	select {
+	case err := <-serverErr:
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	case <-ctx.Done():
+	}
+	stop()
+	log.Println("Nhận tín hiệu dừng, đang tắt server...")
+
+	// Cho các request đang xử lý tối đa 15 giây để hoàn tất.
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		return fmt.Errorf("tắt server không thành công: %w", err)
+	}
+	log.Println("Server đã tắt an toàn.")
+	return nil
 }
 
 func protectExistingAdmin(db *gorm.DB) error {
@@ -169,18 +212,10 @@ func seedDefaults(db *gorm.DB) error {
 	return nil
 }
 
-func corsMiddleware() gin.HandlerFunc {
-	allowedOrigins := map[string]struct{}{
-		"http://localhost:3000": {},
-		"http://localhost:3001": {},
-	}
-	if configuredOrigins := os.Getenv("CORS_ALLOWED_ORIGINS"); configuredOrigins != "" {
-		allowedOrigins = make(map[string]struct{})
-		for _, origin := range strings.Split(configuredOrigins, ",") {
-			if origin = strings.TrimSpace(origin); origin != "" {
-				allowedOrigins[origin] = struct{}{}
-			}
-		}
+func corsMiddleware(origins []string) gin.HandlerFunc {
+	allowedOrigins := make(map[string]struct{}, len(origins))
+	for _, origin := range origins {
+		allowedOrigins[origin] = struct{}{}
 	}
 
 	return func(c *gin.Context) {

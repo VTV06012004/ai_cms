@@ -7,13 +7,12 @@ import (
 )
 
 type userResponse struct {
-	ID         uint      `json:"id"`
-	Email      string    `json:"email"`
-	Name       string    `json:"name"`
-	Role       string    `json:"role"`
-	CanApprove bool      `json:"can_approve"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	ID        uint      `json:"id"`
+	Email     string    `json:"email"`
+	Name      string    `json:"name"`
+	Role      string    `json:"role"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type categoryResponse struct {
@@ -103,8 +102,7 @@ func toUserResponse(user domain.User) userResponse {
 	data := user.Data()
 	return userResponse{
 		ID: data.ID, Email: string(data.Email), Name: data.Name, Role: string(data.Role),
-		CanApprove: data.CanApprove,
-		CreatedAt:  data.CreatedAt, UpdatedAt: data.UpdatedAt,
+		CreatedAt: data.CreatedAt, UpdatedAt: data.UpdatedAt,
 	}
 }
 

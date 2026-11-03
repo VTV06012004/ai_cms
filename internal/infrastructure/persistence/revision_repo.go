@@ -34,7 +34,7 @@ func (r *RevisionRepository) GetByPostID(postID uint) ([]domain.Revision, error)
 func (r *RevisionRepository) GetByID(id uint) (*domain.Revision, error) {
 	var model RevisionModel
 	if err := r.db.Preload("User").First(&model, id).Error; err != nil {
-		return nil, err
+		return nil, notFoundOr(err, domain.ErrRevisionNotFound)
 	}
 
 	var _ domain.RevisionRepository = (*RevisionRepository)(nil)
