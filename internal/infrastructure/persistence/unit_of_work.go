@@ -20,6 +20,7 @@ func (u *GormUnitOfWork) WithinTransaction(work func(usecase.TransactionReposito
 			Users:      NewUserRepository(tx),
 			Posts:      NewPostRepository(tx),
 			Categories: NewCategoryRepository(tx),
+			Tags:       NewTagRepository(tx),
 			Menus:      NewMenuRepository(tx),
 			Revisions:  NewRevisionRepository(tx),
 			Audits:     NewAuditRepository(tx),

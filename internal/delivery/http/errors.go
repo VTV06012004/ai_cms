@@ -54,6 +54,17 @@ var errorRules = []errorRule{
 	{domain.ErrCategorySlugRequired, http.StatusBadRequest},
 	{domain.ErrMenuNameRequired, http.StatusBadRequest},
 	{domain.ErrMenuItemTitleRequired, http.StatusBadRequest},
+
+	{domain.ErrCategoryNotFound, http.StatusNotFound},
+	{domain.ErrTagNotFound, http.StatusNotFound},
+
+	{domain.ErrCategoryInUse, http.StatusConflict},
+	{domain.ErrCategoryHasChildren, http.StatusConflict},
+	{domain.ErrTagAlreadyExists, http.StatusConflict},
+
+	{domain.ErrInvalidCategoryParent, http.StatusBadRequest},
+	{domain.ErrTagNameRequired, http.StatusBadRequest},
+	{domain.ErrTagSlugRequired, http.StatusBadRequest},
 }
 
 func writeError(c *gin.Context, err error) {

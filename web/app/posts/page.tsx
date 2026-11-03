@@ -232,7 +232,14 @@ export default function PostsPage() {
               >
                 Giới thiệu
               </button>
-
+              {(userRoleLower === 'admin' || userRoleLower === 'editor') && (
+                <button
+                  onClick={() => router.push('/admin/catalog')}
+                  className="hover:text-emerald-600 transition cursor-pointer flex items-center gap-1 font-semibold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-md border border-emerald-200"
+                >
+                  🗂️ Danh mục · Thẻ · Menu
+                </button>
+              )}
               {userRoleLower === 'admin' && (
                 <>
                   <button

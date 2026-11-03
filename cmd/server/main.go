@@ -82,8 +82,8 @@ func run() error {
 		return err
 	}
 	postUC := usecase.NewPostUseCase(postRepo, unitOfWork)
-	categoryUC := usecase.NewCategoryUseCase(categoryRepo)
-	tagUC := usecase.NewTagUseCase(tagRepo)
+	categoryUC := usecase.NewCategoryUseCase(categoryRepo, unitOfWork)
+	tagUC := usecase.NewTagUseCase(tagRepo, unitOfWork)
 	menuUC := usecase.NewMenuUseCase(menuRepo, categoryRepo, unitOfWork)
 	revisionUC := usecase.NewRevisionUseCase(revisionRepo, postRepo, unitOfWork)
 	auditUC := usecase.NewAuditUseCase(auditRepo)

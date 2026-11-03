@@ -54,6 +54,11 @@ func RegisterRoutes(
 	{
 		moderationGroup.PUT("/posts/:id/moderate", postH.Moderate)
 		moderationGroup.POST("/categories", catH.Create)
+		moderationGroup.PUT("/categories/:id", catH.Update)
+		moderationGroup.DELETE("/categories/:id", catH.Delete)
+		moderationGroup.POST("/tags", tagH.Create)
+		moderationGroup.PUT("/tags/:id", tagH.Update)
+		moderationGroup.DELETE("/tags/:id", tagH.Delete)
 	}
 
 	adminProtected := r.Group("/api")
@@ -62,6 +67,7 @@ func RegisterRoutes(
 		adminProtected.GET("/audit-logs", auditH.GetAuditLogs)
 		adminProtected.POST("/menus", menuH.Create)
 		adminProtected.DELETE("/menus/:id", menuH.Delete)
+		adminProtected.PUT("/menus/:id", menuH.Update)
 	}
 
 	adminUsers := r.Group("/api/admin")

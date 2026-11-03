@@ -37,6 +37,9 @@ func TestWriteErrorMapsBusinessErrorsToStatusCodes(t *testing.T) {
 		{domain.ErrEmailAlreadyExists, http.StatusConflict},
 		{domain.ErrCategoryAlreadyExists, http.StatusConflict},
 		{domain.ErrInvalidRole, http.StatusBadRequest},
+		{domain.ErrCategoryNotFound, http.StatusNotFound},
+		{domain.ErrCategoryInUse, http.StatusConflict},
+		{domain.ErrInvalidCategoryParent, http.StatusBadRequest},
 	}
 	for _, tc := range cases {
 		response := runWriteError(tc.err)
