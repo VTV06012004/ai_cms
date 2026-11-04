@@ -1,11 +1,11 @@
 package persistence
 
 import (
+	"api/internal/domain"
 	"errors"
 	"fmt"
 	"strings"
-
-	"api/internal/domain"
+	"time"
 
 	mysqlDriver "github.com/go-sql-driver/mysql"
 	"gorm.io/gorm"
@@ -120,4 +120,21 @@ func replacePostTags(tx *gorm.DB, post *PostModel, tagIDs []uint) error {
 		}
 	}
 	return tx.Model(post).Association("Tags").Replace(tags)
+}
+
+func (r *PostRepository) ListDue(now time.Time, limit int) ([]domain.Post, error) {
+	var models []PostModel
+	err := r.db.Where("status = ? AND scheduled_at IS NOT NULL AND scheduled_at <= ?", domain.PostStatusScheduled, now).
+		Preload("Tags").
+		Order("scheduled_at ASC, id ASC").
+		Limit(limit).
+		Find(&models).Error
+	if err != nil {
+		return nil, err
+	}
+	result := make([]domain.Post, 0, len(models))
+	for _, model := range models {
+		result = append(result, model.ToDomain())
+	}
+	return result, nil
 }

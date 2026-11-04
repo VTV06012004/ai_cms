@@ -1,8 +1,9 @@
 package http
 
 import (
-	"api/internal/usecase"
 	"net/http"
+
+	"api/internal/usecase"
 
 	"github.com/gin-gonic/gin"
 )
@@ -15,10 +16,15 @@ func NewTagHandler(uc *usecase.TagUseCase) *TagHandler {
 	return &TagHandler{useCase: uc}
 }
 
+type tagRequest struct {
+	Name string `json:"name" binding:"required"`
+	Slug string `json:"slug" binding:"required"`
+}
+
 func (h *TagHandler) GetAll(c *gin.Context) {
 	tags, err := h.useCase.GetAllTags()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Lỗi lấy danh sách thẻ"})
+		writeError(c, err)
 		return
 	}
 	responses := make([]tagResponse, 0, len(tags))
@@ -26,4 +32,48 @@ func (h *TagHandler) GetAll(c *gin.Context) {
 		responses = append(responses, toTagResponse(tag))
 	}
 	c.JSON(http.StatusOK, gin.H{"data": responses})
+}
+
+func (h *TagHandler) Create(c *gin.Context) {
+	var request tagRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		writeInvalidRequest(c)
+		return
+	}
+	tag, err := h.useCase.CreateTag(currentUserID(c), request.Name, request.Slug, c.ClientIP())
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{"data": toTagResponse(tag)})
+}
+
+func (h *TagHandler) Update(c *gin.Context) {
+	id, ok := parseIDParam(c, "id")
+	if !ok {
+		return
+	}
+	var request tagRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		writeInvalidRequest(c)
+		return
+	}
+	tag, err := h.useCase.UpdateTag(currentUserID(c), id, request.Name, request.Slug, c.ClientIP())
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": toTagResponse(tag)})
+}
+
+func (h *TagHandler) Delete(c *gin.Context) {
+	id, ok := parseIDParam(c, "id")
+	if !ok {
+		return
+	}
+	if err := h.useCase.DeleteTag(currentUserID(c), id, c.ClientIP()); err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa thẻ thành công"})
 }

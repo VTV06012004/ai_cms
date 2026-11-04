@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"api/internal/domain"
 	"api/internal/usecase"
 
 	"github.com/gin-gonic/gin"
@@ -25,6 +26,10 @@ type mediaStorageTestStub struct {
 func (*mediaStorageTestStub) Save(string, []byte) error {
 	return nil
 }
+
+func (*mediaStorageTestStub) List() ([]domain.MediaFile, error) { return nil, nil }
+
+func (*mediaStorageTestStub) Delete(string) error { return nil }
 
 func newMultipartUploadRequest(t *testing.T, filename string, content []byte) *http.Request {
 	t.Helper()

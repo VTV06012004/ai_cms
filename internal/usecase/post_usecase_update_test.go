@@ -1,9 +1,9 @@
 package usecase
 
 import (
-	"testing"
-
 	"api/internal/domain"
+	"testing"
+	"time"
 )
 
 type postUpdateUnitOfWork struct {
@@ -38,6 +38,10 @@ func (r *postUpdateRepository) Update(post *domain.Post, _ []uint) (*domain.Post
 
 func (r *postUpdateRepository) Delete(uint) error {
 	return nil
+}
+
+func (r *postUpdateRepository) ListDue(time.Time, int) ([]domain.Post, error) {
+	return nil, nil
 }
 
 type postUpdateRevisionRepository struct{}

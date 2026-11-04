@@ -13,6 +13,7 @@ import (
 type revisionUseCase interface {
 	GetByPostID(postID, userID uint, userRole string) ([]domain.Revision, error)
 	RestoreRevision(revisionID, userID uint, userRole, ipAddress string) (*domain.Post, error)
+	CompareRevisions(fromID, toID, userID uint, userRole string) (*domain.RevisionComparison, error)
 }
 
 type RevisionHandler struct {
@@ -80,4 +81,32 @@ func (h *RevisionHandler) Restore(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Đã khôi phục bài viết về phiên bản được chọn thành công", "data": toPostResponse(*post)})
+}
+
+func (h *RevisionHandler) Compare(c *gin.Context) {
+	fromID, err := strconv.ParseUint(c.Query("from"), 10, 32)
+	if err != nil || fromID == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "ID phiên bản gốc không hợp lệ"})
+		return
+	}
+	var toID uint64
+	if to := c.Query("to"); to != "" && to != "current" {
+		toID, err = strconv.ParseUint(to, 10, 32)
+		if err != nil || toID == 0 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "ID phiên bản so sánh không hợp lệ"})
+			return
+		}
+	}
+
+	userIDValue, _ := c.Get("user_id")
+	userID, _ := userIDValue.(uint)
+	roleValue, _ := c.Get("user_role")
+	role, _ := roleValue.(string)
+
+	comparison, err := h.useCase.CompareRevisions(uint(fromID), uint(toID), userID, role)
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": toRevisionComparisonResponse(*comparison)})
 }

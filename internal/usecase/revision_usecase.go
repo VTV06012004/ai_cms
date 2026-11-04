@@ -67,3 +67,35 @@ func (uc *RevisionUseCase) RestoreRevision(revisionID, userID uint, userRole, ip
 	}
 	return restored, nil
 }
+
+// CompareRevisions so sánh phiên bản fromID với phiên bản toID; toID = 0 nghĩa là bản hiện tại của bài viết.
+func (uc *RevisionUseCase) CompareRevisions(fromID, toID, userID uint, userRole string) (*domain.RevisionComparison, error) {
+	from, err := uc.revRepo.GetByID(fromID)
+	if err != nil {
+		return nil, err
+	}
+	fromData := from.Data()
+	post, err := uc.postRepo.GetByID(fromData.PostID)
+	if err != nil {
+		return nil, err
+	}
+	if !post.CanBeManagedBy(userID, domain.UserRole(userRole)) {
+		return nil, domain.ErrPostAccessDenied
+	}
+
+	var toData domain.RevisionData
+	if toID == 0 {
+		toData = domain.RevisionDataFromPost(post.Data())
+	} else {
+		to, err := uc.revRepo.GetByID(toID)
+		if err != nil {
+			return nil, err
+		}
+		toData = to.Data()
+		if toData.PostID != fromData.PostID {
+			return nil, domain.ErrRevisionPostMismatch
+		}
+	}
+	comparison := domain.CompareRevisions(fromData, toData)
+	return &comparison, nil
+}

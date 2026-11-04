@@ -1,9 +1,9 @@
 package http
 
 import (
-	"api/internal/usecase"
 	"net/http"
-	"strconv"
+
+	"api/internal/usecase"
 
 	"github.com/gin-gonic/gin"
 )
@@ -14,6 +14,28 @@ type MenuHandler struct {
 
 func NewMenuHandler(uc *usecase.MenuUseCase) *MenuHandler {
 	return &MenuHandler{useCase: uc}
+}
+
+type menuRequest struct {
+	Name      string `json:"name" binding:"required"`
+	Location  string `json:"location"`
+	MenuItems []struct {
+		Title     string `json:"title" binding:"required"`
+		Type      string `json:"type"`
+		TargetID  uint   `json:"target_id"`
+		URL       string `json:"url"`
+		SortOrder int    `json:"sort_order"`
+	} `json:"menu_items"`
+}
+
+func (r menuRequest) toInput() usecase.MenuInputDTO {
+	input := usecase.MenuInputDTO{Name: r.Name, Location: r.Location}
+	for _, item := range r.MenuItems {
+		input.MenuItems = append(input.MenuItems, usecase.MenuItemInputDTO{
+			Title: item.Title, Type: item.Type, TargetID: item.TargetID, URL: item.URL, SortOrder: item.SortOrder,
+		})
+	}
+	return input
 }
 
 func (h *MenuHandler) GetAll(c *gin.Context) {
@@ -30,54 +52,45 @@ func (h *MenuHandler) GetAll(c *gin.Context) {
 }
 
 func (h *MenuHandler) Create(c *gin.Context) {
-	var request struct {
-		Name      string `json:"name" binding:"required"`
-		Location  string `json:"location"`
-		MenuItems []struct {
-			Title     string `json:"title" binding:"required"`
-			Type      string `json:"type"`
-			TargetID  uint   `json:"target_id"`
-			URL       string `json:"url"`
-			SortOrder int    `json:"sort_order"`
-		} `json:"menu_items"`
-	}
+	var request menuRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		writeInvalidRequest(c)
 		return
 	}
-	input := usecase.MenuInputDTO{Name: request.Name, Location: request.Location}
-	for _, item := range request.MenuItems {
-		input.MenuItems = append(input.MenuItems, usecase.MenuItemInputDTO{
-			Title: item.Title, Type: item.Type, TargetID: item.TargetID, URL: item.URL, SortOrder: item.SortOrder,
-		})
-	}
-
-	userIDValue, _ := c.Get("user_id")
-	userID, _ := userIDValue.(uint)
-
-	menu, err := h.useCase.CreateMenu(userID, input, c.ClientIP())
+	menu, err := h.useCase.CreateMenu(currentUserID(c), request.toInput(), c.ClientIP())
 	if err != nil {
 		writeError(c, err)
 		return
 	}
-
 	c.JSON(http.StatusCreated, gin.H{"data": toMenuResponse(*menu)})
 }
 
-func (h *MenuHandler) Delete(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+func (h *MenuHandler) Update(c *gin.Context) {
+	id, ok := parseIDParam(c, "id")
+	if !ok {
+		return
+	}
+	var request menuRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		writeInvalidRequest(c)
+		return
+	}
+	menu, err := h.useCase.UpdateMenu(currentUserID(c), id, request.toInput(), c.ClientIP())
 	if err != nil {
 		writeError(c, err)
 		return
 	}
+	c.JSON(http.StatusOK, gin.H{"data": toMenuResponse(*menu)})
+}
 
-	userIDValue, _ := c.Get("user_id")
-	userID, _ := userIDValue.(uint)
-
-	if err := h.useCase.DeleteMenu(userID, uint(id), c.ClientIP()); err != nil {
+func (h *MenuHandler) Delete(c *gin.Context) {
+	id, ok := parseIDParam(c, "id")
+	if !ok {
+		return
+	}
+	if err := h.useCase.DeleteMenu(currentUserID(c), id, c.ClientIP()); err != nil {
 		writeError(c, err)
 		return
 	}
-
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa menu thành công"})
 }

@@ -41,7 +41,7 @@ func (role UserRole) CanSubmitPostStatus(status PostStatus) bool {
 	switch status {
 	case PostStatusDraft, PostStatusReview:
 		return role.IsValid()
-	case PostStatusPublished:
+	case PostStatusPublished, PostStatusScheduled:
 		return role.CanPublishDirectly()
 	default:
 		return false
@@ -50,7 +50,7 @@ func (role UserRole) CanSubmitPostStatus(status PostStatus) bool {
 
 // EnsureCanSetPostStatus là nơi duy nhất quyết định vai trò nào được đặt trạng thái nào cho bài viết.
 func (role UserRole) EnsureCanSetPostStatus(status PostStatus) error {
-	if status == PostStatusPublished && !role.CanPublishDirectly() {
+	if (status == PostStatusPublished || status == PostStatusScheduled) && !role.CanPublishDirectly() {
 		return ErrPublishNotAllowed
 	}
 	if !role.CanSubmitPostStatus(status) {

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import { apiUrl, mediaUrl } from '@/lib/api';
 import { removeMarkdownImage } from '@/lib/markdown';
+import MediaPicker from '@/app/components/MediaPicker';
 
 interface Category {
   id: number;
@@ -29,11 +30,12 @@ export default function CreatePostPage() {
 
   // State quản lý Trạng thái bài viết và Phân quyền vai trò
   const [status, setStatus] = useState('draft');
+  const [scheduledAt, setScheduledAt] = useState('');
   const [userRole, setUserRole] = useState('author');
 
   // State cho Ảnh xem trước (Preview Image)
   const [previewImage, setPreviewImage] = useState<string>('');
-
+  const [showMediaPicker, setShowMediaPicker] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -148,6 +150,10 @@ export default function CreatePostPage() {
           category_id: Number(categoryId),
           tag_ids: selectedTags,
           status: status, // 👈 Gửi trạng thái thực tế người dùng chọn
+          scheduled_at:
+            status === 'scheduled' && scheduledAt
+              ? new Date(scheduledAt).toISOString()
+              : null,
         },
         {
           headers: {
@@ -237,9 +243,21 @@ export default function CreatePostPage() {
             <option value="review">Gửi kiểm duyệt (Review)</option>
             {/* Chỉ Admin hoặc Editor mới thấy option Published */}
             {(userRole === 'admin' || userRole === 'editor') && (
-              <option value="published">Xuất bản (Published)</option>
+              <>
+                <option value="published">Xuất bản (Published)</option>
+                <option value="scheduled">Hẹn giờ đăng (Scheduled)</option>
+              </>
             )}
           </select>
+          {status === 'scheduled' && (
+            <input
+              type="datetime-local"
+              value={scheduledAt}
+              onChange={(e) => setScheduledAt(e.target.value)}
+              className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white"
+              required
+            />
+          )}
         </div>
 
         {/* 🏷 Phần chọn Thẻ (Tags) */}
@@ -275,7 +293,6 @@ export default function CreatePostPage() {
 
         {/* 📷 Phần Upload Hình ảnh & Xem trước*/}
         <div>
-          <label className="block text-sm font-medium mb-1 text-gray-700">Tải lên hình ảnh</label>
           <input
             id="image-upload-input"                                        
             type="file"
@@ -283,6 +300,24 @@ export default function CreatePostPage() {
             onChange={handleImageUpload}
             className="w-full border p-2 rounded bg-white text-sm text-black"
           />
+          {/* ⬇️ CHÈN NÚT VÀO ĐÂY ⬇️ */}
+          <button
+            type="button"
+            onClick={() => setShowMediaPicker(true)}
+            className="mt-2 px-3 py-1.5 text-sm bg-gray-100 border rounded hover:bg-gray-200 cursor-pointer text-black"
+          >
+            🖼️ Chọn từ thư viện
+          </button>
+          {showMediaPicker && (
+            <MediaPicker
+              onClose={() => setShowMediaPicker(false)}
+              onSelect={(url) => {
+                setPreviewImage(url);
+                setContent((prev: string) => prev + `\n![Image](${url})\n`);
+                setShowMediaPicker(false);
+              }}
+            />
+          )}
           {previewImage && (
             <div className="mt-3 relative inline-block">
               <p className="text-xs text-gray-500 mb-1">Ảnh đã tải lên gần nhất:</p>

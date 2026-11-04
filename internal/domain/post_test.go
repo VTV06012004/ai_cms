@@ -142,3 +142,63 @@ func TestNewPostRejectsRemovedApprovedStatus(t *testing.T) {
 		t.Fatalf("expected ErrInvalidPostStatus, got %v", err)
 	}
 }
+
+func TestApplyScheduleRequiresFutureTime(t *testing.T) {
+	now := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	post := ReconstitutePost(PostData{Status: PostStatusScheduled})
+
+	if err := post.ApplySchedule(nil, now); !errors.Is(err, ErrInvalidScheduleTime) {
+		t.Fatalf("expected ErrInvalidScheduleTime for nil, got %v", err)
+	}
+	past := now.Add(-time.Minute)
+	if err := post.ApplySchedule(&past, now); !errors.Is(err, ErrInvalidScheduleTime) {
+		t.Fatalf("expected ErrInvalidScheduleTime for past, got %v", err)
+	}
+	future := now.Add(time.Hour)
+	if err := post.ApplySchedule(&future, now); err != nil {
+		t.Fatalf("ApplySchedule returned error: %v", err)
+	}
+	if got := post.Data().ScheduledAt; got == nil || !got.Equal(future) {
+		t.Fatalf("scheduled time = %v, want %v", got, future)
+	}
+}
+
+func TestApplyScheduleClearsTimeForOtherStatuses(t *testing.T) {
+	at := time.Now().Add(time.Hour)
+	post := ReconstitutePost(PostData{Status: PostStatusDraft, ScheduledAt: &at})
+
+	if err := post.ApplySchedule(nil, time.Now()); err != nil {
+		t.Fatalf("ApplySchedule returned error: %v", err)
+	}
+	if post.Data().ScheduledAt != nil {
+		t.Fatal("scheduled time must be cleared for non-scheduled posts")
+	}
+}
+
+func TestPublishScheduledOnlyWhenDue(t *testing.T) {
+	due := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	post := ReconstitutePost(PostData{Status: PostStatusScheduled, ScheduledAt: &due})
+
+	if err := post.PublishScheduled(due.Add(-time.Second)); !errors.Is(err, ErrPostNotDue) {
+		t.Fatalf("expected ErrPostNotDue, got %v", err)
+	}
+	if err := post.PublishScheduled(due.Add(time.Second)); err != nil {
+		t.Fatalf("PublishScheduled returned error: %v", err)
+	}
+	data := post.Data()
+	if data.Status != PostStatusPublished || data.ScheduledAt != nil {
+		t.Fatalf("unexpected state after publishing: %+v", data)
+	}
+	if data.PublishedAt == nil || !data.PublishedAt.Equal(due) {
+		t.Fatalf("published_at = %v, want %v", data.PublishedAt, due)
+	}
+}
+
+func TestAuthorCannotSetScheduledStatus(t *testing.T) {
+	if err := UserRoleAuthor.EnsureCanSetPostStatus(PostStatusScheduled); !errors.Is(err, ErrPublishNotAllowed) {
+		t.Fatalf("expected ErrPublishNotAllowed, got %v", err)
+	}
+	if err := UserRoleEditor.EnsureCanSetPostStatus(PostStatusScheduled); err != nil {
+		t.Fatalf("editor should be allowed, got %v", err)
+	}
+}

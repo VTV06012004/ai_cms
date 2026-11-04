@@ -48,6 +48,7 @@ type postResponse struct {
 	SEOTitle        string            `json:"seo_title"`
 	SEODescription  string            `json:"seo_description"`
 	PublishedAt     *time.Time        `json:"published_at"`
+	ScheduledAt     *time.Time        `json:"scheduled_at"`
 	CreatedAt       time.Time         `json:"created_at"`
 	UpdatedAt       time.Time         `json:"updated_at"`
 	Tags            []tagResponse     `json:"tags,omitempty"`
@@ -140,6 +141,7 @@ func toPostResponse(post domain.Post) postResponse {
 		CategoryID: data.CategoryID, SEOTitle: data.SEOTitle,
 		SEODescription: data.SEODescription, PublishedAt: data.PublishedAt,
 		CreatedAt: data.CreatedAt, UpdatedAt: data.UpdatedAt,
+		ScheduledAt: data.ScheduledAt,
 	}
 	if data.Category != nil {
 		category := toCategoryResponse(*data.Category)
@@ -199,4 +201,57 @@ func toAuditLogResponse(log domain.AuditLog) auditLogResponse {
 		Action: data.Action, Target: data.Target, Details: data.Details,
 		IPAddress: data.IPAddress, CreatedAt: data.CreatedAt,
 	}
+}
+
+type comparedVersionResponse struct {
+	ID         uint          `json:"id"`
+	Title      string        `json:"title"`
+	Slug       string        `json:"slug"`
+	Status     string        `json:"status"`
+	CategoryID uint          `json:"category_id"`
+	User       *userResponse `json:"user,omitempty"`
+	CreatedAt  time.Time     `json:"created_at"`
+}
+
+type fieldChangeResponse struct {
+	Field string `json:"field"`
+	From  string `json:"from"`
+	To    string `json:"to"`
+}
+
+type diffLineResponse struct {
+	Op   string `json:"op"`
+	Text string `json:"text"`
+}
+
+type revisionComparisonResponse struct {
+	From    comparedVersionResponse `json:"from"`
+	To      comparedVersionResponse `json:"to"`
+	Changes []fieldChangeResponse   `json:"changes"`
+	Lines   []diffLineResponse      `json:"lines"`
+	Added   int                     `json:"added"`
+	Removed int                     `json:"removed"`
+}
+
+func toComparedVersion(data domain.RevisionData) comparedVersionResponse {
+	return comparedVersionResponse{
+		ID: data.ID, Title: data.Title, Slug: data.Slug, Status: string(data.Status),
+		CategoryID: data.CategoryID, User: toUserResponsePtr(data.User), CreatedAt: data.CreatedAt,
+	}
+}
+
+func toRevisionComparisonResponse(comparison domain.RevisionComparison) revisionComparisonResponse {
+	response := revisionComparisonResponse{
+		From: toComparedVersion(comparison.From), To: toComparedVersion(comparison.To),
+		Changes: make([]fieldChangeResponse, 0, len(comparison.Changes)),
+		Lines:   make([]diffLineResponse, 0, len(comparison.Lines)),
+		Added:   comparison.Added, Removed: comparison.Removed,
+	}
+	for _, change := range comparison.Changes {
+		response.Changes = append(response.Changes, fieldChangeResponse{Field: change.Field, From: change.From, To: change.To})
+	}
+	for _, line := range comparison.Lines {
+		response.Lines = append(response.Lines, diffLineResponse{Op: string(line.Op), Text: line.Text})
+	}
+	return response
 }

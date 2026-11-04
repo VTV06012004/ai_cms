@@ -1,8 +1,10 @@
 package usecase
 
 import (
+	"api/internal/domain"
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"image"
 	"image/color"
 	"image/gif"
@@ -10,14 +12,23 @@ import (
 	"image/png"
 	"strings"
 	"testing"
+	"time"
 )
 
 type mediaStorageStub struct {
 	name    string
 	content []byte
 	calls   int
+	files   []domain.MediaFile
+	deleted []string
 }
 
+func (s *mediaStorageStub) List() ([]domain.MediaFile, error) { return s.files, nil }
+
+func (s *mediaStorageStub) Delete(name string) error {
+	s.deleted = append(s.deleted, name)
+	return nil
+}
 func (s *mediaStorageStub) Save(name string, content []byte) error {
 	s.name = name
 	s.content = append([]byte(nil), content...)
@@ -106,5 +117,45 @@ func TestUploadImageRejectsFilesOverFiveMegabytes(t *testing.T) {
 	}
 	if storage.calls != 0 {
 		t.Fatal("oversized file was written to storage")
+	}
+}
+
+func TestListImagesIsNewestFirstPaginatedAndImagesOnly(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	storage := &mediaStorageStub{files: []domain.MediaFile{
+		{Name: "a.png", ModifiedAt: base},
+		{Name: "b.jpg", ModifiedAt: base.Add(time.Hour)},
+		{Name: "c.webp", ModifiedAt: base.Add(2 * time.Hour)},
+		{Name: "notes.txt", ModifiedAt: base.Add(3 * time.Hour)},
+	}}
+	useCase := NewMediaUseCase(storage)
+
+	items, info, err := useCase.ListImages(domain.NewPageRequest(1, 2))
+	if err != nil {
+		t.Fatalf("ListImages returned error: %v", err)
+	}
+	if info.Total != 3 || len(items) != 2 || items[0].Name != "c.webp" || items[1].Name != "b.jpg" {
+		t.Fatalf("unexpected first page: total=%d items=%+v", info.Total, items)
+	}
+	items, _, _ = useCase.ListImages(domain.NewPageRequest(2, 2))
+	if len(items) != 1 || items[0].Name != "a.png" {
+		t.Fatalf("unexpected second page: %+v", items)
+	}
+}
+
+func TestDeleteImageRejectsUnsafeNames(t *testing.T) {
+	for _, name := range []string{"", "../secret.png", "a/b.png", "notes.txt", ".."} {
+		storage := &mediaStorageStub{}
+		err := NewMediaUseCase(storage).DeleteImage(name)
+		if !errors.Is(err, domain.ErrMediaNotFound) {
+			t.Fatalf("DeleteImage(%q) error = %v, want ErrMediaNotFound", name, err)
+		}
+		if len(storage.deleted) != 0 {
+			t.Fatalf("DeleteImage(%q) reached storage", name)
+		}
+	}
+	storage := &mediaStorageStub{}
+	if err := NewMediaUseCase(storage).DeleteImage("1700000000.png"); err != nil || len(storage.deleted) != 1 {
+		t.Fatalf("valid name was not deleted: err=%v deleted=%v", err, storage.deleted)
 	}
 }

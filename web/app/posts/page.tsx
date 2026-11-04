@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import { apiUrl, mediaUrl } from '@/lib/api';
-
 interface Category {
   id: number;
   name: string;
@@ -24,6 +23,7 @@ interface Post {
   slug: string;
   content: string;
   status: string;
+  scheduled_at?: string | null;
   rejection_reason?: string;
   category_id: number;
   user_id?: number;
@@ -232,7 +232,20 @@ export default function PostsPage() {
               >
                 Giới thiệu
               </button>
-
+              <button
+                onClick={() => router.push('/admin/media')}
+                className="text-gray-600 hover:text-blue-600 transition cursor-pointer"
+              >
+                🖼️ Thư viện ảnh
+              </button>
+              {(userRoleLower === 'admin' || userRoleLower === 'editor') && (
+                <button
+                  onClick={() => router.push('/admin/catalog')}
+                  className="text-gray-600 hover:text-blue-600 transition cursor-pointer"
+                >
+                  🗂️ Danh mục & Menu
+                </button>
+              )}
               {userRoleLower === 'admin' && (
                 <>
                   <button
@@ -246,6 +259,12 @@ export default function PostsPage() {
                     className="hover:text-purple-600 transition cursor-pointer flex items-center gap-1 font-semibold text-purple-600 bg-purple-50 px-3 py-1 rounded-md border border-purple-200"
                   >
                     🛡️ Nhật ký hệ thống
+                  </button>
+                  <button
+                    onClick={() => window.open(mediaUrl('/docs'), '_blank')}
+                    className="hover:text-emerald-600 transition cursor-pointer flex items-center gap-1 font-semibold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-md border border-emerald-200"
+                  >
+                    📘 Tài liệu API
                   </button>
                 </>
               )}
@@ -407,9 +426,13 @@ export default function PostsPage() {
                             ? 'bg-amber-50 text-amber-700 border-amber-200'
                             : post.status === 'rejected'
                             ? 'bg-red-50 text-red-700 border-red-200'
+                            : post.status === 'scheduled'
+                            ? 'bg-blue-50 text-blue-700 border-blue-200'
                             : 'bg-gray-100 text-gray-600 border-gray-200'
                         }`}>
-                          ● {post.status}
+                          ● {post.status === 'scheduled' && post.scheduled_at
+                            ? `hẹn giờ: ${new Date(post.scheduled_at).toLocaleString('vi-VN')}`
+                            : post.status}
                         </span>
                       </div>
 

@@ -1,11 +1,14 @@
 package http
 
 import (
-	"api/internal/usecase"
 	"errors"
 	"io"
 	"net/http"
 	"path/filepath"
+	"time"
+
+	"api/internal/domain"
+	"api/internal/usecase"
 
 	"github.com/gin-gonic/gin"
 )
@@ -82,3 +85,45 @@ func (h *MediaHandler) ServeUploadedFile(c *gin.Context) {
 	}
 	c.File(filepath.Join("uploads", filename))
 }
+
+type mediaResponse struct {
+	Name       string    `json:"name"`
+	URL        string    `json:"url"`
+	Size       int64     `json:"size"`
+	UploadedAt time.Time `json:"uploaded_at"`
+}
+
+func requestBaseURL(c *gin.Context) string {
+	scheme := "http"
+	if c.Request.TLS != nil {
+		scheme = "https"
+	}
+	return scheme + "://" + c.Request.Host
+}
+
+func (h *MediaHandler) List(c *gin.Context) {
+	files, info, err := h.useCase.ListImages(parsePage(c))
+	if err != nil {
+		writeError(c, err)
+		return
+	}
+	base := requestBaseURL(c)
+	responses := make([]mediaResponse, 0, len(files))
+	for _, file := range files {
+		responses = append(responses, mediaResponse{
+			Name: file.Name, URL: base + "/uploads/" + file.Name,
+			Size: file.Size, UploadedAt: file.ModifiedAt,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"data": responses, "pagination": toPaginationResponse(info)})
+}
+
+func (h *MediaHandler) Delete(c *gin.Context) {
+	if err := h.useCase.DeleteImage(c.Param("name")); err != nil {
+		writeError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa ảnh thành công"})
+}
+
+var _ = domain.ErrMediaNotFound

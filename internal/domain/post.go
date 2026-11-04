@@ -12,6 +12,7 @@ const (
 	PostStatusReview    PostStatus = "review"
 	PostStatusRejected  PostStatus = "rejected"
 	PostStatusPublished PostStatus = "published"
+	PostStatusScheduled PostStatus = "scheduled"
 )
 
 type Post struct {
@@ -31,6 +32,7 @@ type Post struct {
 	seoTitle        string
 	seoDescription  string
 	publishedAt     *time.Time
+	scheduledAt     *time.Time
 	createdAt       time.Time
 	updatedAt       time.Time
 	tags            []Tag
@@ -53,6 +55,7 @@ type PostData struct {
 	SEOTitle        string
 	SEODescription  string
 	PublishedAt     *time.Time
+	ScheduledAt     *time.Time
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 	Tags            []Tag
@@ -93,6 +96,12 @@ func ReconstitutePost(data PostData) *Post {
 		at := *data.PublishedAt
 		publishedAt = &at
 	}
+	var scheduledAt *time.Time
+	if data.ScheduledAt != nil {
+		at := *data.ScheduledAt
+		scheduledAt = &at
+	}
+
 	var category *Category
 	if data.Category != nil {
 		categoryData := data.Category.Data()
@@ -106,6 +115,7 @@ func ReconstitutePost(data PostData) *Post {
 		seoTitle: data.SEOTitle, seoDescription: data.SEODescription,
 		publishedAt: publishedAt, createdAt: data.CreatedAt,
 		updatedAt: data.UpdatedAt, tags: append([]Tag(nil), data.Tags...),
+		scheduledAt: scheduledAt,
 	}
 }
 
@@ -120,6 +130,11 @@ func (p *Post) Data() PostData {
 		at := *p.publishedAt
 		publishedAt = &at
 	}
+	var scheduledAt *time.Time
+	if p.scheduledAt != nil {
+		at := *p.scheduledAt
+		scheduledAt = &at
+	}
 	var category *Category
 	if p.category != nil {
 		category = ReconstituteCategory(p.category.Data())
@@ -132,6 +147,7 @@ func (p *Post) Data() PostData {
 		SEOTitle: p.seoTitle, SEODescription: p.seoDescription,
 		PublishedAt: publishedAt, CreatedAt: p.createdAt,
 		UpdatedAt: p.updatedAt, Tags: append([]Tag(nil), p.tags...),
+		ScheduledAt: scheduledAt,
 	}
 }
 
@@ -197,9 +213,35 @@ func (p *Post) Moderate(status PostStatus, reason string, moderatorID uint, at t
 
 func isValidPostStatus(status PostStatus) bool {
 	switch status {
-	case PostStatusDraft, PostStatusReview, PostStatusRejected, PostStatusPublished:
+	case PostStatusDraft, PostStatusReview, PostStatusRejected, PostStatusPublished, PostStatusScheduled:
 		return true
 	default:
 		return false
 	}
+}
+
+// ApplySchedule đồng bộ giờ hẹn với trạng thái: chỉ bài "scheduled" mới có giờ hẹn.
+func (p *Post) ApplySchedule(at *time.Time, now time.Time) error {
+	if p.status != PostStatusScheduled {
+		p.scheduledAt = nil
+		return nil
+	}
+	if at == nil || !at.After(now) {
+		return ErrInvalidScheduleTime
+	}
+	t := *at
+	p.scheduledAt = &t
+	return nil
+}
+
+// PublishScheduled đăng bài hẹn giờ khi đã đến hạn.
+func (p *Post) PublishScheduled(now time.Time) error {
+	if p.status != PostStatusScheduled || p.scheduledAt == nil || p.scheduledAt.After(now) {
+		return ErrPostNotDue
+	}
+	at := *p.scheduledAt
+	p.status = PostStatusPublished
+	p.publishedAt = &at
+	p.scheduledAt = nil
+	return nil
 }

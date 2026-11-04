@@ -26,6 +26,8 @@ func RegisterRoutes(
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "Gin + MySQL 9.7 Backend is running!"})
 	})
+	r.GET("/docs", ServeDocs)
+	r.GET("/docs/openapi.yaml", ServeOpenAPISpec)
 	r.POST("/api/auth/register", authH.Register)
 	r.POST("/api/auth/login", authH.Login)
 
@@ -46,6 +48,8 @@ func RegisterRoutes(
 		protected.GET("/posts-revisions/:postId", revH.GetByPostID)
 		protected.POST("/revisions/:id/restore", revH.Restore)
 		protected.POST("/upload", mediaH.UploadImage)
+		protected.GET("/media", mediaH.List)
+		protected.GET("/revisions/compare", revH.Compare)
 	}
 
 	// Admin / Moderator Routes
@@ -54,6 +58,12 @@ func RegisterRoutes(
 	{
 		moderationGroup.PUT("/posts/:id/moderate", postH.Moderate)
 		moderationGroup.POST("/categories", catH.Create)
+		moderationGroup.PUT("/categories/:id", catH.Update)
+		moderationGroup.DELETE("/categories/:id", catH.Delete)
+		moderationGroup.POST("/tags", tagH.Create)
+		moderationGroup.PUT("/tags/:id", tagH.Update)
+		moderationGroup.DELETE("/tags/:id", tagH.Delete)
+		moderationGroup.DELETE("/media/:name", mediaH.Delete)
 	}
 
 	adminProtected := r.Group("/api")
@@ -62,6 +72,7 @@ func RegisterRoutes(
 		adminProtected.GET("/audit-logs", auditH.GetAuditLogs)
 		adminProtected.POST("/menus", menuH.Create)
 		adminProtected.DELETE("/menus/:id", menuH.Delete)
+		adminProtected.PUT("/menus/:id", menuH.Update)
 	}
 
 	adminUsers := r.Group("/api/admin")

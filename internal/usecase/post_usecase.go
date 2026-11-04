@@ -1,10 +1,11 @@
 package usecase
 
 import (
-	"fmt"
-	"time"
-
 	"api/internal/domain"
+	"errors"
+	"fmt"
+	"log"
+	"time"
 )
 
 type PostUseCase struct {
@@ -17,12 +18,13 @@ func NewPostUseCase(posts domain.PostRepository, unitOfWork UnitOfWork) *PostUse
 }
 
 type CreatePostDTO struct {
-	Title      string
-	Slug       string
-	Content    string
-	Status     string
-	CategoryID uint
-	TagIDs     []uint
+	Title       string
+	Slug        string
+	Content     string
+	Status      string
+	CategoryID  uint
+	TagIDs      []uint
+	ScheduledAt *time.Time
 }
 
 func (uc *PostUseCase) GetAllPosts(userRole string, userID uint, page domain.PageRequest) ([]domain.Post, domain.PageInfo, error) {
@@ -73,6 +75,9 @@ func (uc *PostUseCase) CreatePost(userID uint, userRole string, input CreatePost
 	if err != nil {
 		return nil, err
 	}
+	if err := post.ApplySchedule(input.ScheduledAt, time.Now()); err != nil {
+		return nil, err
+	}
 	err = uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
 		created, err := repositories.Posts.Create(post, input.TagIDs)
 		if err != nil {
@@ -115,6 +120,9 @@ func (uc *PostUseCase) UpdatePost(id, userID uint, userRole string, input Create
 		data := post.Data()
 		previous := snapshot(post, userID)
 		if err := post.Update(input.Title, input.Slug, input.Content, domain.PostStatus(input.Status), input.CategoryID); err != nil {
+			return err
+		}
+		if err := post.ApplySchedule(input.ScheduledAt, time.Now()); err != nil {
 			return err
 		}
 		if err := repositories.Revisions.Create(previous); err != nil {
@@ -194,4 +202,41 @@ func tagIDs(tags []domain.Tag) []uint {
 		ids = append(ids, tag.Data().ID)
 	}
 	return ids
+}
+
+// PublishDuePosts đăng các bài hẹn giờ đã đến hạn; trả về số bài đã đăng.
+func (uc *PostUseCase) PublishDuePosts(now time.Time) (int, error) {
+	due, err := uc.postRepo.ListDue(now, 100)
+	if err != nil {
+		return 0, err
+	}
+	published := 0
+	for _, candidate := range due {
+		id := candidate.Data().ID
+		err := uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
+			// Đọc lại trong transaction để tránh đăng trùng/đăng sai khi bài vừa bị sửa.
+			post, err := repositories.Posts.GetByID(id)
+			if err != nil {
+				return err
+			}
+			if err := post.PublishScheduled(now); err != nil {
+				return err
+			}
+			data := post.Data()
+			if _, err := repositories.Posts.Update(post, tagIDs(data.Tags)); err != nil {
+				return err
+			}
+			return repositories.Audits.RecordLog(data.AuthorID, "AUTO_PUBLISH_POST",
+				fmt.Sprintf("Bài viết ID: %d", id),
+				fmt.Sprintf("Tự động đăng bài hẹn giờ: '%s'", data.Title), "system")
+		})
+		if err != nil {
+			if !errors.Is(err, domain.ErrPostNotDue) {
+				log.Printf("không thể tự động đăng bài %d: %v", id, err)
+			}
+			continue
+		}
+		published++
+	}
+	return published, nil
 }

@@ -44,6 +44,9 @@ var errorRules = []errorRule{
 	{domain.ErrPostNotInReview, http.StatusBadRequest},
 	{domain.ErrRejectionReasonRequired, http.StatusBadRequest},
 	{domain.ErrInvalidPostStatus, http.StatusBadRequest},
+	{domain.ErrInvalidScheduleTime, http.StatusBadRequest},
+	{domain.ErrPostNotDue, http.StatusBadRequest},
+	{domain.ErrMediaNotFound, http.StatusNotFound},
 	{domain.ErrInvalidRole, http.StatusBadRequest},
 	{domain.ErrUserNameRequired, http.StatusBadRequest},
 	{domain.ErrInvalidEmail, http.StatusBadRequest},
@@ -54,6 +57,18 @@ var errorRules = []errorRule{
 	{domain.ErrCategorySlugRequired, http.StatusBadRequest},
 	{domain.ErrMenuNameRequired, http.StatusBadRequest},
 	{domain.ErrMenuItemTitleRequired, http.StatusBadRequest},
+	{domain.ErrRevisionPostMismatch, http.StatusBadRequest},
+
+	{domain.ErrCategoryNotFound, http.StatusNotFound},
+	{domain.ErrTagNotFound, http.StatusNotFound},
+
+	{domain.ErrCategoryInUse, http.StatusConflict},
+	{domain.ErrCategoryHasChildren, http.StatusConflict},
+	{domain.ErrTagAlreadyExists, http.StatusConflict},
+
+	{domain.ErrInvalidCategoryParent, http.StatusBadRequest},
+	{domain.ErrTagNameRequired, http.StatusBadRequest},
+	{domain.ErrTagSlugRequired, http.StatusBadRequest},
 }
 
 func writeError(c *gin.Context, err error) {

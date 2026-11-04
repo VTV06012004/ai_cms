@@ -53,3 +53,29 @@ func (c *Category) Data() CategoryData {
 		Description: c.description, ParentID: parentID,
 	}
 }
+
+func (c *Category) Describe(description string) {
+	c.description = strings.TrimSpace(description)
+}
+
+// Update thay toàn bộ thông tin; dữ liệu không hợp lệ thì không đổi gì.
+// Quy tắc về danh mục cha (không tự làm cha mình, không vòng lặp) nằm ở usecase vì cần tra cứu DB.
+func (c *Category) Update(name, slug, description string, parentID *uint) error {
+	name = strings.TrimSpace(name)
+	slug = strings.TrimSpace(slug)
+	if name == "" {
+		return ErrCategoryNameRequired
+	}
+	if slug == "" {
+		return ErrCategorySlugRequired
+	}
+	c.name = name
+	c.slug = slug
+	c.description = strings.TrimSpace(description)
+	c.parentID = nil
+	if parentID != nil {
+		id := *parentID
+		c.parentID = &id
+	}
+	return nil
+}

@@ -24,3 +24,9 @@ func isDuplicateKey(err error, indexHint string) bool {
 		mysqlError.Number == 1062 &&
 		strings.Contains(mysqlError.Message, indexHint)
 }
+
+// isForeignKeyViolation báo lỗi MySQL 1451: xóa bản ghi còn được bảng khác tham chiếu.
+func isForeignKeyViolation(err error) bool {
+	var mysqlError *mysqlDriver.MySQLError
+	return errors.As(err, &mysqlError) && mysqlError.Number == 1451
+}

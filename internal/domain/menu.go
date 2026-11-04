@@ -100,3 +100,17 @@ func (m *Menu) Data() MenuData {
 		CreatedAt: m.createdAt, UpdatedAt: m.updatedAt,
 	}
 }
+
+func (m *Menu) Rename(name, location string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ErrMenuNameRequired
+	}
+	m.name = name
+	m.location = location
+	return nil
+}
+
+func (m *Menu) ReplaceItems(items []MenuItem) {
+	m.menuItems = append([]MenuItem(nil), items...)
+}
