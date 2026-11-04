@@ -52,6 +52,14 @@ To also delete the database and start again from an empty one, add `-v`
 
 ## Configuration notes
 
+## API documentation
+
+After starting the stack, open `http://localhost:8081/docs` for the Swagger UI.
+Sign in via `POST /api/auth/login`, copy the token, click **Authorize** and paste it
+to try the protected endpoints. The raw spec is at `/docs/openapi.yaml`
+(source: `internal/delivery/http/openapi.yaml`). A test fails if a route is added
+without documenting it, so keep the spec in sync.
+
 - **Secrets.** There is no default JWT secret, and the application exits if
   `JWT_SECRET` is missing. Compose also requires `MYSQL_PASSWORD` and
   `MYSQL_ROOT_PASSWORD`. When the API runs directly outside Compose it reads
@@ -112,6 +120,16 @@ rules such as valid roles, post updates, and moderation transitions.
 
 Run the unit tests with `go test ./...`. The Docker build also checks `gofmt` and
 runs the tests before building the server.
+
+On Windows without a local Go install, run Go commands through Docker from the
+repository root:
+
+    docker run --rm -v "%cd%":/src -w /src golang:1.21 gofmt -l .
+    docker run --rm -v "%cd%":/src -w /src golang:1.21 gofmt -w .
+    docker run --rm -v "%cd%":/src -w /src golang:1.21 go test ./...
+
+`gofmt -l .` lists files that are not formatted (the Docker build fails if there are
+any), and `gofmt -w .` fixes them in place. Run the last two before committing.
 
 Post slug uniqueness integration tests require a disposable MySQL 8.4 instance
 and `MYSQL_TEST_DSN` with permission to create and drop databases. The tests

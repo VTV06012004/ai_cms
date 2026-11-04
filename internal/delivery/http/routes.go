@@ -26,6 +26,8 @@ func RegisterRoutes(
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "Gin + MySQL 9.7 Backend is running!"})
 	})
+	r.GET("/docs", ServeDocs)
+	r.GET("/docs/openapi.yaml", ServeOpenAPISpec)
 	r.POST("/api/auth/register", authH.Register)
 	r.POST("/api/auth/login", authH.Login)
 

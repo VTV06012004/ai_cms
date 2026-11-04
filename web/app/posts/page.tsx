@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import axios from 'axios';
 import { apiUrl, mediaUrl } from '@/lib/api';
-
 interface Category {
   id: number;
   name: string;
@@ -260,6 +259,12 @@ export default function PostsPage() {
                     className="hover:text-purple-600 transition cursor-pointer flex items-center gap-1 font-semibold text-purple-600 bg-purple-50 px-3 py-1 rounded-md border border-purple-200"
                   >
                     🛡️ Nhật ký hệ thống
+                  </button>
+                  <button
+                    onClick={() => window.open(mediaUrl('/docs'), '_blank')}
+                    className="hover:text-emerald-600 transition cursor-pointer flex items-center gap-1 font-semibold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-md border border-emerald-200"
+                  >
+                    📘 Tài liệu API
                   </button>
                 </>
               )}
