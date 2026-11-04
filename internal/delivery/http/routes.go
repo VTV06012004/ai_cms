@@ -47,6 +47,7 @@ func RegisterRoutes(
 		protected.POST("/revisions/:id/restore", revH.Restore)
 		protected.POST("/upload", mediaH.UploadImage)
 		protected.GET("/media", mediaH.List)
+		protected.GET("/revisions/compare", revH.Compare)
 	}
 
 	// Admin / Moderator Routes

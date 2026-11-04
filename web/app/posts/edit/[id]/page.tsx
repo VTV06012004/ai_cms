@@ -24,7 +24,6 @@ interface Revision {
   slug: string;
   content: string;
   status: string;
-  scheduled_at?: string | null;
   category_id: number;
   created_at: string;
   user?: {
@@ -32,6 +31,15 @@ interface Revision {
     email: string;
     role: string;
   };
+}
+
+interface Comparison {
+  from: { id: number; title: string; created_at: string; user?: { email: string } };
+  to: { id: number; title: string; created_at: string; user?: { email: string } };
+  changes: { field: string; from: string; to: string }[];
+  lines: { op: 'equal' | 'add' | 'remove'; text: string }[];
+  added: number;
+  removed: number;
 }
 
 function EditPostForm() {
@@ -49,9 +57,14 @@ function EditPostForm() {
   const [selectedTags, setSelectedTags] = useState<number[]>([]);
   const [previewImage, setPreviewImage] = useState<string>('');
   const [showMediaPicker, setShowMediaPicker] = useState(false);
+
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [restoringId, setRestoringId] = useState<number | null>(null);
   const [previewRevision, setPreviewRevision] = useState<Revision | null>(null);
+
+  const [compareIds, setCompareIds] = useState<number[]>([]);
+  const [comparison, setComparison] = useState<Comparison | null>(null);
+  const [comparing, setComparing] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const router = useRouter();
@@ -149,7 +162,7 @@ function EditPostForm() {
 
       const imageUrl = mediaUrl(res.data.url);
       setPreviewImage(imageUrl);
-      setContent((prev) => prev + `\n![Image](${imageUrl})\n`);
+      setContent((prev: string) => prev + `\n![Image](${imageUrl})\n`);
       alert('Upload ảnh thành công và đã chèn vào nội dung!');
     } catch (err) {
       console.error('Lỗi upload ảnh:', err);
@@ -160,7 +173,7 @@ function EditPostForm() {
 
   const handleRemoveImage = () => {
     if (previewImage) {
-      setContent((prev) => removeMarkdownImage(prev, previewImage));
+      setContent((prev: string) => removeMarkdownImage(prev, previewImage));
     }
     setPreviewImage('');
     
@@ -202,6 +215,48 @@ function EditPostForm() {
       setLoading(false);
     }
   };
+
+  const toggleCompare = (revId: number) => {
+    setCompareIds((prev: number[]) => {
+      if (prev.includes(revId)) return prev.filter((i) => i !== revId);
+      return prev.length >= 2 ? [prev[1], revId] : [...prev, revId];
+    });
+  };
+
+  const handleCompare = async () => {
+    if (compareIds.length === 0) return;
+    let from: number;
+    let to: number | 'current' = 'current';
+    if (compareIds.length === 1) {
+      from = compareIds[0];
+    } else {
+      const picked = revisions
+        .filter((r) => compareIds.includes(r.id))
+        .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      from = picked[0].id;
+      to = picked[1].id;
+    }
+    setComparing(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(apiUrl('revisions/compare'), {
+        params: { from, to },
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setComparison(res.data.data);
+    } catch (err) {
+      const message = axios.isAxiosError(err) ? err.response?.data?.error : undefined;
+      alert(message || 'Không thể so sánh các phiên bản');
+    } finally {
+      setComparing(false);
+    }
+  };
+
+  const fieldLabel = (field: string) =>
+    ({ title: 'Tiêu đề', slug: 'Slug', status: 'Trạng thái', category_id: 'Danh mục' } as Record<string, string>)[field] || field;
+
+  const fieldValue = (field: string, value: string) =>
+    field === 'category_id' ? categories.find((c) => String(c.id) === value)?.name || `#${value}` : value;
 
   const handleRestore = async (rev: Revision) => {
     if (!confirm(`Bạn có chắc chắn muốn khôi phục về phiên bản từ ngày ${new Date(rev.created_at).toLocaleString('vi-VN')} không?`)) {
@@ -427,6 +482,24 @@ function EditPostForm() {
           </span>
         </h2>
 
+        {revisions.length > 0 && (
+          <div className="mb-4 flex items-center gap-3 text-sm">
+            <button
+              type="button"
+              disabled={compareIds.length === 0 || comparing}
+              onClick={handleCompare}
+              className="px-3 py-1.5 bg-indigo-600 text-white font-semibold rounded disabled:opacity-40 cursor-pointer"
+            >
+              {comparing ? 'Đang so sánh...' : '⚖️ So sánh'}
+            </button>
+            <span className="text-gray-500">
+              {compareIds.length === 0 && 'Tick 1 phiên bản để so với bản hiện tại, hoặc 2 phiên bản để so với nhau.'}
+              {compareIds.length === 1 && 'So với bản hiện tại (tick thêm 1 phiên bản nếu muốn so hai bản cũ).'}
+              {compareIds.length === 2 && 'So sánh hai phiên bản đã chọn.'}
+            </span>
+          </div>
+        )}
+
         {revisions.length === 0 ? (
           <p className="text-sm text-gray-500 italic bg-gray-50 p-4 rounded-md border">
             Chưa có lịch sử chỉnh sửa nào.
@@ -454,6 +527,14 @@ function EditPostForm() {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-1 text-xs text-gray-600 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={compareIds.includes(rev.id)}
+                      onChange={() => toggleCompare(rev.id)}
+                    />
+                    So sánh
+                  </label>
                   <button
                     type="button"
                     onClick={() => setPreviewRevision(rev)}
@@ -475,6 +556,68 @@ function EditPostForm() {
           </div>
         )}
       </div>
+
+      {/* MODAL SO SÁNH PHIÊN BẢN */}
+      {comparison && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[88vh] flex flex-col">
+            <div className="flex items-start justify-between p-4 border-b">
+              <div className="text-sm text-gray-700">
+                <h3 className="font-bold text-gray-900 mb-1">⚖️ So sánh phiên bản</h3>
+                <p>
+                  <span className="text-red-600 font-semibold">Cũ:</span>{' '}
+                  {comparison.from.id === 0 ? 'Bản hiện tại' : new Date(comparison.from.created_at).toLocaleString('vi-VN')}
+                  {' → '}
+                  <span className="text-green-600 font-semibold">Mới:</span>{' '}
+                  {comparison.to.id === 0 ? 'Bản hiện tại' : new Date(comparison.to.created_at).toLocaleString('vi-VN')}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  <span className="text-green-600 font-semibold">+{comparison.added} dòng</span>{' '}
+                  <span className="text-red-600 font-semibold">−{comparison.removed} dòng</span>
+                </p>
+              </div>
+              <button type="button" onClick={() => setComparison(null)} className="text-gray-500 hover:text-gray-800 cursor-pointer">✕</button>
+            </div>
+
+            <div className="p-4 overflow-y-auto space-y-4">
+              {comparison.changes.length > 0 && (
+                <div className="border rounded p-3 bg-gray-50 text-sm space-y-1">
+                  {comparison.changes.map((change) => (
+                    <div key={change.field}>
+                      <strong className="text-gray-700">{fieldLabel(change.field)}:</strong>{' '}
+                      <span className="bg-red-100 text-red-700 px-1 rounded line-through">{fieldValue(change.field, change.from)}</span>
+                      {' → '}
+                      <span className="bg-green-100 text-green-700 px-1 rounded">{fieldValue(change.field, change.to)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {comparison.added === 0 && comparison.removed === 0 ? (
+                <p className="text-sm text-gray-500 italic">Nội dung hai phiên bản giống nhau.</p>
+              ) : (
+                <div className="border rounded font-mono text-xs overflow-x-auto">
+                  {comparison.lines.map((line, idx) => (
+                    <div
+                      key={idx}
+                      className={`px-3 py-0.5 whitespace-pre-wrap break-words ${
+                        line.op === 'add'
+                          ? 'bg-green-50 text-green-800'
+                          : line.op === 'remove'
+                          ? 'bg-red-50 text-red-800'
+                          : 'text-gray-600'
+                      }`}
+                    >
+                      {line.op === 'add' ? '+ ' : line.op === 'remove' ? '− ' : '  '}
+                      {line.text || ' '}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL XEM TRƯỚC PHIÊN BẢN CŨ & RENDER ẢNH */}
       {previewRevision && (

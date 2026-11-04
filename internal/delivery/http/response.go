@@ -202,3 +202,56 @@ func toAuditLogResponse(log domain.AuditLog) auditLogResponse {
 		IPAddress: data.IPAddress, CreatedAt: data.CreatedAt,
 	}
 }
+
+type comparedVersionResponse struct {
+	ID         uint          `json:"id"`
+	Title      string        `json:"title"`
+	Slug       string        `json:"slug"`
+	Status     string        `json:"status"`
+	CategoryID uint          `json:"category_id"`
+	User       *userResponse `json:"user,omitempty"`
+	CreatedAt  time.Time     `json:"created_at"`
+}
+
+type fieldChangeResponse struct {
+	Field string `json:"field"`
+	From  string `json:"from"`
+	To    string `json:"to"`
+}
+
+type diffLineResponse struct {
+	Op   string `json:"op"`
+	Text string `json:"text"`
+}
+
+type revisionComparisonResponse struct {
+	From    comparedVersionResponse `json:"from"`
+	To      comparedVersionResponse `json:"to"`
+	Changes []fieldChangeResponse   `json:"changes"`
+	Lines   []diffLineResponse      `json:"lines"`
+	Added   int                     `json:"added"`
+	Removed int                     `json:"removed"`
+}
+
+func toComparedVersion(data domain.RevisionData) comparedVersionResponse {
+	return comparedVersionResponse{
+		ID: data.ID, Title: data.Title, Slug: data.Slug, Status: string(data.Status),
+		CategoryID: data.CategoryID, User: toUserResponsePtr(data.User), CreatedAt: data.CreatedAt,
+	}
+}
+
+func toRevisionComparisonResponse(comparison domain.RevisionComparison) revisionComparisonResponse {
+	response := revisionComparisonResponse{
+		From: toComparedVersion(comparison.From), To: toComparedVersion(comparison.To),
+		Changes: make([]fieldChangeResponse, 0, len(comparison.Changes)),
+		Lines:   make([]diffLineResponse, 0, len(comparison.Lines)),
+		Added:   comparison.Added, Removed: comparison.Removed,
+	}
+	for _, change := range comparison.Changes {
+		response.Changes = append(response.Changes, fieldChangeResponse{Field: change.Field, From: change.From, To: change.To})
+	}
+	for _, line := range comparison.Lines {
+		response.Lines = append(response.Lines, diffLineResponse{Op: string(line.Op), Text: line.Text})
+	}
+	return response
+}

@@ -39,4 +39,5 @@ var (
 	ErrTagSlugRequired         = errors.New("slug thẻ là bắt buộc")
 	ErrInvalidScheduleTime     = errors.New("thời gian hẹn đăng phải ở tương lai")
 	ErrPostNotDue              = errors.New("bài viết chưa đến giờ đăng")
+	ErrRevisionPostMismatch    = errors.New("hai phiên bản không thuộc cùng một bài viết")
 )

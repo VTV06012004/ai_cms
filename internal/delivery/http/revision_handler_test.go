@@ -33,6 +33,10 @@ func (*revisionUseCaseStub) RestoreRevision(uint, uint, string, string) (*domain
 	return nil, nil
 }
 
+func (*revisionUseCaseStub) CompareRevisions(uint, uint, uint, string) (*domain.RevisionComparison, error) {
+	return nil, nil
+}
+
 func TestRevisionHandlerRequiresIdentityAndPassesAuthorizationContext(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	revision := domain.ReconstituteRevision(domain.RevisionData{

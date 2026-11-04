@@ -57,6 +57,7 @@ var errorRules = []errorRule{
 	{domain.ErrCategorySlugRequired, http.StatusBadRequest},
 	{domain.ErrMenuNameRequired, http.StatusBadRequest},
 	{domain.ErrMenuItemTitleRequired, http.StatusBadRequest},
+	{domain.ErrRevisionPostMismatch, http.StatusBadRequest},
 
 	{domain.ErrCategoryNotFound, http.StatusNotFound},
 	{domain.ErrTagNotFound, http.StatusNotFound},
