@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import axios from 'axios';
 import { apiUrl, mediaUrl } from '@/lib/api';
 import { removeMarkdownImage } from '@/lib/markdown';
+import MediaPicker from '@/app/components/MediaPicker';
 
 interface Category {
   id: number;
@@ -23,6 +24,7 @@ interface Revision {
   slug: string;
   content: string;
   status: string;
+  scheduled_at?: string | null;
   category_id: number;
   created_at: string;
   user?: {
@@ -37,6 +39,7 @@ function EditPostForm() {
   const [slug, setSlug] = useState('');
   const [content, setContent] = useState('');
   const [status, setStatus] = useState('draft');
+  const [scheduledAt, setScheduledAt] = useState('');
   const [categoryId, setCategoryId] = useState<number | ''>('');
   
   const [userRole, setUserRole] = useState('author');
@@ -45,7 +48,7 @@ function EditPostForm() {
   const [tags, setTags] = useState<Tag[]>([]);
   const [selectedTags, setSelectedTags] = useState<number[]>([]);
   const [previewImage, setPreviewImage] = useState<string>('');
-
+  const [showMediaPicker, setShowMediaPicker] = useState(false);
   const [revisions, setRevisions] = useState<Revision[]>([]);
   const [restoringId, setRestoringId] = useState<number | null>(null);
   const [previewRevision, setPreviewRevision] = useState<Revision | null>(null);
@@ -97,6 +100,13 @@ function EditPostForm() {
           const postContent = post.content || ''; 
           setContent(postContent);
           setStatus(post.status || 'draft');
+          if (post.scheduled_at) {
+            const d = new Date(post.scheduled_at);
+            const pad = (n: number) => String(n).padStart(2, '0');
+            setScheduledAt(
+              `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+            );
+          }
           setCategoryId(post.category_id || post.CategoryID || '');
 
           const imgMatch = postContent.match(/!\[.*?\]\((.*?)\)/);
@@ -171,6 +181,10 @@ function EditPostForm() {
           slug,
           content,
           status,
+          scheduled_at:
+            status === 'scheduled' && scheduledAt
+              ? new Date(scheduledAt).toISOString()
+              : null,
           category_id: Number(categoryId),
           tag_ids: selectedTags,
         },
@@ -309,6 +323,23 @@ function EditPostForm() {
             onChange={handleImageUpload}
             className="w-full border p-2 rounded bg-white text-sm"
           />
+          <button
+            type="button"
+            onClick={() => setShowMediaPicker(true)}
+            className="mt-2 px-3 py-1.5 text-sm bg-gray-100 border rounded hover:bg-gray-200 cursor-pointer"
+          >
+            🖼️ Chọn từ thư viện
+          </button>
+          {showMediaPicker && (
+            <MediaPicker
+              onClose={() => setShowMediaPicker(false)}
+              onSelect={(url) => {
+                setPreviewImage(url);
+                setContent((prev: string) => prev + `\n![Image](${url})\n`);
+                setShowMediaPicker(false);
+              }}
+            />
+          )}
           {previewImage && (
             <div className="mt-3 relative inline-block">
               <p className="text-xs text-gray-500 mb-1">Ảnh hiện tại:</p>
@@ -341,9 +372,21 @@ function EditPostForm() {
             <option value="draft">Bản nháp (Draft)</option>
             <option value="review">Gửi kiểm duyệt (Review)</option>
             {(userRole === 'admin' || userRole === 'editor') && (
-              <option value="published">Xuất bản (Published)</option>
+              <>
+                <option value="published">Xuất bản (Published)</option>
+                <option value="scheduled">Hẹn giờ đăng (Scheduled)</option>
+              </>
             )}
           </select>
+          {status === 'scheduled' && (
+            <input
+              type="datetime-local"
+              value={scheduledAt}
+              onChange={(e) => setScheduledAt(e.target.value)}
+              className="mt-2 w-full border p-2 rounded bg-white"
+              required
+            />
+          )}
         </div>
 
         <div>

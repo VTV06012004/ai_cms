@@ -3,6 +3,7 @@ package http
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -54,12 +55,13 @@ func (h *PostHandler) GetByID(c *gin.Context) {
 
 func (h *PostHandler) Create(c *gin.Context) {
 	var request struct {
-		Title      string `json:"title" binding:"required"`
-		Slug       string `json:"slug" binding:"required"`
-		Content    string `json:"content"`
-		Status     string `json:"status"`
-		CategoryID uint   `json:"category_id"`
-		TagIDs     []uint `json:"tag_ids"`
+		Title       string     `json:"title" binding:"required"`
+		Slug        string     `json:"slug" binding:"required"`
+		Content     string     `json:"content"`
+		Status      string     `json:"status"`
+		CategoryID  uint       `json:"category_id"`
+		TagIDs      []uint     `json:"tag_ids"`
+		ScheduledAt *time.Time `json:"scheduled_at"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
 		writeInvalidRequest(c)
@@ -83,6 +85,7 @@ func (h *PostHandler) Create(c *gin.Context) {
 	post, err := h.useCase.CreatePost(userID, userRole, usecase.CreatePostDTO{
 		Title: request.Title, Slug: request.Slug, Content: request.Content,
 		Status: request.Status, CategoryID: request.CategoryID, TagIDs: request.TagIDs,
+		ScheduledAt: request.ScheduledAt,
 	}, c.ClientIP())
 	if err != nil {
 		writeError(c, err)
@@ -110,12 +113,13 @@ func (h *PostHandler) Update(c *gin.Context) {
 	userRole, _ := userRoleValue.(string)
 
 	var request struct {
-		Title      string `json:"title" binding:"required"`
-		Slug       string `json:"slug" binding:"required"`
-		Content    string `json:"content"`
-		Status     string `json:"status"`
-		CategoryID uint   `json:"category_id"`
-		TagIDs     []uint `json:"tag_ids"`
+		Title       string     `json:"title" binding:"required"`
+		Slug        string     `json:"slug" binding:"required"`
+		Content     string     `json:"content"`
+		Status      string     `json:"status"`
+		CategoryID  uint       `json:"category_id"`
+		TagIDs      []uint     `json:"tag_ids"`
+		ScheduledAt *time.Time `json:"scheduled_at"`
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
 		writeInvalidRequest(c)
@@ -125,6 +129,7 @@ func (h *PostHandler) Update(c *gin.Context) {
 	updatedPost, err := h.useCase.UpdatePost(uint(id), userID, userRole, usecase.CreatePostDTO{
 		Title: request.Title, Slug: request.Slug, Content: request.Content,
 		Status: request.Status, CategoryID: request.CategoryID, TagIDs: request.TagIDs,
+		ScheduledAt: request.ScheduledAt,
 	}, c.ClientIP())
 	if err != nil {
 		writeError(c, err)

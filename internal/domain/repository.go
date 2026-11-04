@@ -1,5 +1,7 @@
 package domain
 
+import "time"
+
 type PostListCriteria struct {
 	AuthorID         uint
 	IncludePublished bool
@@ -21,6 +23,7 @@ type PostRepository interface {
 	Create(post *Post, tagIDs []uint) (*Post, error)
 	Update(post *Post, tagIDs []uint) (*Post, error)
 	Delete(id uint) error
+	ListDue(now time.Time, limit int) ([]Post, error)
 }
 
 type CategoryRepository interface {

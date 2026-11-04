@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"api/internal/domain"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,6 +28,36 @@ func (s *LocalFileStorage) Save(name string, content []byte) error {
 	}
 	if err := file.Close(); err != nil {
 		return fmt.Errorf("không thể đóng file upload: %w", err)
+	}
+	return nil
+}
+
+func (s *LocalFileStorage) List() ([]domain.MediaFile, error) {
+	entries, err := os.ReadDir(s.directory)
+	if err != nil {
+		return nil, fmt.Errorf("không thể đọc thư mục upload: %w", err)
+	}
+	files := make([]domain.MediaFile, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		files = append(files, domain.MediaFile{Name: entry.Name(), Size: info.Size(), ModifiedAt: info.ModTime()})
+	}
+	return files, nil
+}
+
+func (s *LocalFileStorage) Delete(name string) error {
+	err := os.Remove(filepath.Join(s.directory, filepath.Base(name)))
+	if errors.Is(err, os.ErrNotExist) {
+		return domain.ErrMediaNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("không thể xóa file upload: %w", err)
 	}
 	return nil
 }

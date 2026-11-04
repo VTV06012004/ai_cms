@@ -1,10 +1,10 @@
 package usecase
 
 import (
+	"api/internal/domain"
 	"errors"
 	"testing"
-
-	"api/internal/domain"
+	"time"
 )
 
 type revisionPostRepositoryStub struct {
@@ -30,6 +30,10 @@ func (revisionPostRepositoryStub) Update(*domain.Post, []uint) (*domain.Post, er
 
 func (revisionPostRepositoryStub) Delete(uint) error {
 	return nil
+}
+
+func (revisionPostRepositoryStub) ListDue(time.Time, int) ([]domain.Post, error) {
+	return nil, nil
 }
 
 type revisionRepositoryStub struct {

@@ -1,10 +1,9 @@
 package usecase
 
 import (
+	"api/internal/domain"
 	"errors"
 	"testing"
-
-	"api/internal/domain"
 )
 
 // permissionPostRepository dùng lại stub của test cập nhật bài viết,

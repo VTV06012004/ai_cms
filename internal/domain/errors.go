@@ -37,4 +37,6 @@ var (
 	ErrTagAlreadyExists        = errors.New("tên hoặc slug của thẻ đã tồn tại")
 	ErrTagNameRequired         = errors.New("tên thẻ là bắt buộc")
 	ErrTagSlugRequired         = errors.New("slug thẻ là bắt buộc")
+	ErrInvalidScheduleTime     = errors.New("thời gian hẹn đăng phải ở tương lai")
+	ErrPostNotDue              = errors.New("bài viết chưa đến giờ đăng")
 )

@@ -48,6 +48,7 @@ type postResponse struct {
 	SEOTitle        string            `json:"seo_title"`
 	SEODescription  string            `json:"seo_description"`
 	PublishedAt     *time.Time        `json:"published_at"`
+	ScheduledAt     *time.Time        `json:"scheduled_at"`
 	CreatedAt       time.Time         `json:"created_at"`
 	UpdatedAt       time.Time         `json:"updated_at"`
 	Tags            []tagResponse     `json:"tags,omitempty"`
@@ -140,6 +141,7 @@ func toPostResponse(post domain.Post) postResponse {
 		CategoryID: data.CategoryID, SEOTitle: data.SEOTitle,
 		SEODescription: data.SEODescription, PublishedAt: data.PublishedAt,
 		CreatedAt: data.CreatedAt, UpdatedAt: data.UpdatedAt,
+		ScheduledAt: data.ScheduledAt,
 	}
 	if data.Category != nil {
 		category := toCategoryResponse(*data.Category)

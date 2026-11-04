@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"api/internal/domain"
 	"bytes"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -24,6 +26,8 @@ var (
 
 type MediaStorage interface {
 	Save(name string, content []byte) error
+	List() ([]domain.MediaFile, error)
+	Delete(name string) error
 }
 
 type MediaUseCase struct {
@@ -52,6 +56,50 @@ func (uc *MediaUseCase) UploadImage(originalName string, content []byte) (string
 		return "", err
 	}
 	return name, nil
+}
+
+func (uc *MediaUseCase) ListImages(page domain.PageRequest) ([]domain.MediaFile, domain.PageInfo, error) {
+	all, err := uc.storage.List()
+	if err != nil {
+		return nil, domain.PageInfo{}, err
+	}
+	images := make([]domain.MediaFile, 0, len(all))
+	for _, file := range all {
+		if isImageName(file.Name) {
+			images = append(images, file)
+		}
+	}
+	sort.Slice(images, func(i, j int) bool {
+		if !images[i].ModifiedAt.Equal(images[j].ModifiedAt) {
+			return images[i].ModifiedAt.After(images[j].ModifiedAt)
+		}
+		return images[i].Name > images[j].Name
+	})
+	total := int64(len(images))
+	start := page.Offset()
+	if start > len(images) {
+		start = len(images)
+	}
+	end := start + page.PerPage
+	if end > len(images) {
+		end = len(images)
+	}
+	return images[start:end], page.Info(total), nil
+}
+
+func (uc *MediaUseCase) DeleteImage(name string) error {
+	if name != filepath.Base(name) || !isImageName(name) {
+		return domain.ErrMediaNotFound
+	}
+	return uc.storage.Delete(name)
+}
+
+func isImageName(name string) bool {
+	if name == "" || name != filepath.Base(name) {
+		return false
+	}
+	_, ok := supportedImageExtensions[strings.ToLower(filepath.Ext(name))]
+	return ok
 }
 
 var supportedImageExtensions = map[string]string{

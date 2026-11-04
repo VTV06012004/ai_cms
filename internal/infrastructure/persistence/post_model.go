@@ -14,7 +14,7 @@ type PostModel struct {
 	Slug            string    `gorm:"size:255;not null"`
 	Content         string    `gorm:"type:longtext"`
 	Excerpt         string    `gorm:"type:text"`
-	Status          string    `gorm:"type:enum('draft','review','approved','rejected','published');default:'draft'"`
+	Status          string    `gorm:"type:enum('draft','review','approved','rejected','published','scheduled');default:'draft'"`
 	RejectionReason string    `gorm:"type:text"`
 	AuthorID        uint      `gorm:"index"`
 	Author          UserModel `gorm:"foreignKey:AuthorID"`
@@ -24,6 +24,7 @@ type PostModel struct {
 	Category        CategoryModel `gorm:"foreignKey:CategoryID"`
 	SEOTitle        string
 	SEODescription  string
+	ScheduledAt     *time.Time `gorm:"index"`
 	PublishedAt     *time.Time
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
@@ -50,6 +51,7 @@ func (m PostModel) ToDomain() domain.Post {
 		SEOTitle:        m.SEOTitle,
 		SEODescription:  m.SEODescription,
 		PublishedAt:     m.PublishedAt,
+		ScheduledAt:     m.ScheduledAt,
 		CreatedAt:       m.CreatedAt,
 		UpdatedAt:       m.UpdatedAt,
 	}
@@ -86,6 +88,7 @@ func postModelFromDomain(post *domain.Post) PostModel {
 		SEOTitle:        data.SEOTitle,
 		SEODescription:  data.SEODescription,
 		PublishedAt:     data.PublishedAt,
+		ScheduledAt:     data.ScheduledAt,
 		CreatedAt:       data.CreatedAt,
 		UpdatedAt:       data.UpdatedAt,
 	}

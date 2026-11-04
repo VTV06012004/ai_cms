@@ -46,6 +46,7 @@ func RegisterRoutes(
 		protected.GET("/posts-revisions/:postId", revH.GetByPostID)
 		protected.POST("/revisions/:id/restore", revH.Restore)
 		protected.POST("/upload", mediaH.UploadImage)
+		protected.GET("/media", mediaH.List)
 	}
 
 	// Admin / Moderator Routes
@@ -59,6 +60,7 @@ func RegisterRoutes(
 		moderationGroup.POST("/tags", tagH.Create)
 		moderationGroup.PUT("/tags/:id", tagH.Update)
 		moderationGroup.DELETE("/tags/:id", tagH.Delete)
+		moderationGroup.DELETE("/media/:name", mediaH.Delete)
 	}
 
 	adminProtected := r.Group("/api")

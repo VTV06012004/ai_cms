@@ -114,7 +114,11 @@ func run() error {
 	// Nhận Ctrl+C hoặc tín hiệu dừng của Docker (SIGTERM).
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-
+	schedulerDone := make(chan struct{})
+	go func() {
+		defer close(schedulerDone)
+		runScheduler(ctx, postUC)
+	}()
 	serverErr := make(chan error, 1)
 	go func() {
 		log.Printf("Backend đang chạy tại cổng %s...", cfg.Port)
@@ -138,8 +142,34 @@ func run() error {
 	if err := server.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("tắt server không thành công: %w", err)
 	}
+	<-schedulerDone
 	log.Println("Server đã tắt an toàn.")
 	return nil
+}
+
+// runScheduler quét bài hẹn giờ mỗi phút cho đến khi ctx bị hủy.
+func runScheduler(ctx context.Context, posts *usecase.PostUseCase) {
+	tick := func() {
+		count, err := posts.PublishDuePosts(time.Now())
+		if err != nil {
+			log.Printf("quét bài hẹn giờ lỗi: %v", err)
+			return
+		}
+		if count > 0 {
+			log.Printf("đã tự động đăng %d bài hẹn giờ", count)
+		}
+	}
+	tick()
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			tick()
+		}
+	}
 }
 
 func protectExistingAdmin(db *gorm.DB) error {
@@ -176,7 +206,10 @@ func migrate(db *gorm.DB) error {
 	); err != nil {
 		return err
 	}
-	return persistence.MigrateActivePostSlugIndex(db)
+	if err := persistence.MigrateActivePostSlugIndex(db); err != nil {
+		return err
+	}
+	return persistence.MigrateScheduledStatus(db)
 }
 
 func seedDefaults(db *gorm.DB) error {

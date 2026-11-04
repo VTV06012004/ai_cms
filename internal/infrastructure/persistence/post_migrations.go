@@ -36,3 +36,12 @@ func MigrateActivePostSlugIndex(db *gorm.DB) error {
 	}
 	return nil
 }
+
+func MigrateScheduledStatus(db *gorm.DB) error {
+	if err := db.Exec(
+		"ALTER TABLE posts MODIFY COLUMN status ENUM('draft','review','approved','rejected','published','scheduled') NOT NULL DEFAULT 'draft'",
+	).Error; err != nil {
+		return fmt.Errorf("mở rộng trạng thái bài viết: %w", err)
+	}
+	return nil
+}
