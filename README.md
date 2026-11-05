@@ -50,11 +50,6 @@ docker compose down
 To also delete the database and start again from an empty one, add `-v`
 (`docker compose down -v`).
 
-## Business rules
-
-- **Editing a published post.** When an author edits a post that is already published
-  (or scheduled), the post goes back to `review`. Editors and admins can edit published posts without losing their status.
-
 ## Configuration notes
 
 ## API documentation
