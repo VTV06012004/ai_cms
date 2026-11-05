@@ -1,9 +1,9 @@
 package usecase
 
 import (
-	"fmt"
-
 	"api/internal/domain"
+	"fmt"
+	"time"
 )
 
 type RevisionUseCase struct {
@@ -47,6 +47,7 @@ func (uc *RevisionUseCase) RestoreRevision(revisionID, userID uint, userRole, ip
 		if err := post.Update(revisionData.Title, revisionData.Slug, revisionData.Content, postData.Status, revisionData.CategoryID); err != nil {
 			return fmt.Errorf("dữ liệu revision không hợp lệ: %w", err)
 		}
+		post.SettleStatus(domain.UserRole(userRole), time.Now())
 		if err := repositories.Revisions.Create(previous); err != nil {
 			return fmt.Errorf("không thể lưu snapshot trước khi khôi phục: %w", err)
 		}

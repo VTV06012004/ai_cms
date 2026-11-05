@@ -75,9 +75,11 @@ func (uc *PostUseCase) CreatePost(userID uint, userRole string, input CreatePost
 	if err != nil {
 		return nil, err
 	}
-	if err := post.ApplySchedule(input.ScheduledAt, time.Now()); err != nil {
+	now := time.Now()
+	if err := post.ApplySchedule(input.ScheduledAt, now); err != nil {
 		return nil, err
 	}
+	post.SettleStatus(role, now)
 	err = uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
 		created, err := repositories.Posts.Create(post, input.TagIDs)
 		if err != nil {
@@ -112,7 +114,8 @@ func (uc *PostUseCase) UpdatePost(id, userID uint, userRole string, input Create
 			return domain.ErrPostAccessDenied
 		}
 		requestedStatus := domain.PostStatus(input.Status)
-		if requestedStatus != "" {
+		// Chỉ kiểm quyền khi trạng thái thực sự thay đổi; form sửa bài luôn gửi lại trạng thái hiện tại.
+		if requestedStatus != "" && requestedStatus != post.Data().Status {
 			if err := role.EnsureCanSetPostStatus(requestedStatus); err != nil {
 				return err
 			}
@@ -122,9 +125,11 @@ func (uc *PostUseCase) UpdatePost(id, userID uint, userRole string, input Create
 		if err := post.Update(input.Title, input.Slug, input.Content, domain.PostStatus(input.Status), input.CategoryID); err != nil {
 			return err
 		}
-		if err := post.ApplySchedule(input.ScheduledAt, time.Now()); err != nil {
+		now := time.Now()
+		if err := post.ApplySchedule(input.ScheduledAt, now); err != nil {
 			return err
 		}
+		post.SettleStatus(role, now)
 		if err := repositories.Revisions.Create(previous); err != nil {
 			return fmt.Errorf("không thể lưu revision trước khi cập nhật: %w", err)
 		}

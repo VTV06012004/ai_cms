@@ -50,6 +50,18 @@ docker compose down
 To also delete the database and start again from an empty one, add `-v`
 (`docker compose down -v`).
 
+## Business rules
+
+- **Editing a published post.** When an author edits a post that is already published
+  (or scheduled), the post goes back to `review` and an editor must approve it again.
+  Editors and admins can edit published posts without losing their status.
+- **Publication time.** `published_at` is set the first time a post becomes published,
+  whether through moderation, direct publishing by an editor or admin, or a scheduled
+  publication.
+- **Scheduled posts.** Only editors and admins can schedule a post. Editing a scheduled
+  post without sending `scheduled_at` keeps the existing schedule; a new schedule must
+  be in the future.
+
 ## Configuration notes
 
 ## API documentation
