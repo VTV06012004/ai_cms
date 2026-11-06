@@ -5,20 +5,28 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"time"
 
-	"api/internal/domain"
 	"api/internal/usecase"
 
 	"github.com/gin-gonic/gin"
 )
 
 type MediaHandler struct {
-	useCase *usecase.MediaUseCase
+	useCase       *usecase.MediaUseCase
+	publicBaseURL string
 }
 
-func NewMediaHandler(uc *usecase.MediaUseCase) *MediaHandler {
-	return &MediaHandler{useCase: uc}
+// NewMediaHandler tạo handler ảnh. publicBaseURL là gốc URL công khai của API (ví dụ
+// https://cms.example.com); để trống thì URL ảnh là đường dẫn tương đối /uploads/...
+// URL không bao giờ được dựng từ header Host của request, vì client có thể gửi giá trị giả.
+func NewMediaHandler(uc *usecase.MediaUseCase, publicBaseURL string) *MediaHandler {
+	return &MediaHandler{useCase: uc, publicBaseURL: strings.TrimRight(publicBaseURL, "/")}
+}
+
+func (h *MediaHandler) uploadURL(name string) string {
+	return h.publicBaseURL + "/uploads/" + name
 }
 
 func (h *MediaHandler) UploadImage(c *gin.Context) {
@@ -65,13 +73,9 @@ func (h *MediaHandler) UploadImage(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu file trên server"})
 		return
 	}
-	scheme := "http"
-	if c.Request.TLS != nil {
-		scheme = "https"
-	}
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Upload ảnh thành công!",
-		"url":     scheme + "://" + c.Request.Host + "/uploads/" + filename,
+		"url":     h.uploadURL(filename),
 	})
 }
 
@@ -93,25 +97,16 @@ type mediaResponse struct {
 	UploadedAt time.Time `json:"uploaded_at"`
 }
 
-func requestBaseURL(c *gin.Context) string {
-	scheme := "http"
-	if c.Request.TLS != nil {
-		scheme = "https"
-	}
-	return scheme + "://" + c.Request.Host
-}
-
 func (h *MediaHandler) List(c *gin.Context) {
 	files, info, err := h.useCase.ListImages(parsePage(c))
 	if err != nil {
 		writeError(c, err)
 		return
 	}
-	base := requestBaseURL(c)
 	responses := make([]mediaResponse, 0, len(files))
 	for _, file := range files {
 		responses = append(responses, mediaResponse{
-			Name: file.Name, URL: base + "/uploads/" + file.Name,
+			Name: file.Name, URL: h.uploadURL(file.Name),
 			Size: file.Size, UploadedAt: file.ModifiedAt,
 		})
 	}
@@ -125,5 +120,3 @@ func (h *MediaHandler) Delete(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa ảnh thành công"})
 }
-
-var _ = domain.ErrMediaNotFound

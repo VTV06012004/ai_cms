@@ -98,7 +98,7 @@ func run() error {
 		delivery.NewMenuHandler(menuUC),
 		delivery.NewRevisionHandler(revisionUC),
 		delivery.NewAuditHandler(auditUC),
-		delivery.NewMediaHandler(mediaUC),
+		delivery.NewMediaHandler(mediaUC, cfg.PublicBaseURL),
 		delivery.NewUserHandler(userUC),
 	)
 

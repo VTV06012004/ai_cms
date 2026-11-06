@@ -75,3 +75,33 @@ func TestLoadParsesCustomValues(t *testing.T) {
 		t.Fatalf("initial admin email = %q", cfg.InitialAdmin.Email)
 	}
 }
+
+func TestLoadPublicBaseURLDefaultsToEmptyAndTrimsTrailingSlash(t *testing.T) {
+	cfg, err := load(envFrom(validEnv()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.PublicBaseURL != "" {
+		t.Fatalf("public base URL = %q, want empty by default", cfg.PublicBaseURL)
+	}
+
+	env := validEnv()
+	env["PUBLIC_BASE_URL"] = " https://cms.example.com/ "
+	cfg, err = load(envFrom(env))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.PublicBaseURL != "https://cms.example.com" {
+		t.Fatalf("public base URL = %q, want trailing slash and spaces removed", cfg.PublicBaseURL)
+	}
+}
+
+func TestLoadRejectsInvalidPublicBaseURL(t *testing.T) {
+	for _, value := range []string{"cms.example.com", "/uploads", "ftp://cms.example.com", "https://", "https://cms.example.com?x=1", "https://cms.example.com/#top"} {
+		env := validEnv()
+		env["PUBLIC_BASE_URL"] = value
+		if _, err := load(envFrom(env)); err == nil {
+			t.Errorf("PUBLIC_BASE_URL=%q was accepted", value)
+		}
+	}
+}
