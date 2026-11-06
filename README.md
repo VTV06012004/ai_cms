@@ -50,6 +50,32 @@ docker compose down
 To also delete the database and start again from an empty one, add `-v`
 (`docker compose down -v`).
 
+## Database migrations
+
+The schema is managed by versioned SQL files in `migrations/` (`0001_init.sql`, `0002_...`).
+The API never changes the schema when it starts; a separate command applies the files:
+
+- `docker compose up` runs the `migrate` service first and starts the API only after it succeeds.
+- Manually: `docker compose run --rm migrate` (or `make migrate` with `DB_DSN` set).
+
+Rules:
+
+- Never edit a migration that has already run anywhere. `migrate` stores a checksum of every
+  applied file and refuses to continue if one changed. Add a new file with the next number instead.
+- In production, run the migration **before** deploying the new API binary.
+- MySQL commits DDL statements immediately, so a migration that fails halfway is not rolled back.
+  Fix the database by hand, then run `migrate` again.
+
+### Existing database created before migrations
+
+A database created by the old AutoMigrate startup has tables but no `schema_migrations` table,
+and `migrate` refuses to touch it. Make sure it is on the latest schema, then record `0001`
+as applied without running it:
+
+```sh
+docker compose run --rm migrate ./migrate -baseline 1
+```
+
 ## Business rules
 
 - **Editing a published post.** When an author edits a post that is already published
