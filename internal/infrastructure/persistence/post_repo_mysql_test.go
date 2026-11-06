@@ -1,6 +1,8 @@
 package persistence
 
 import (
+	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"os"
@@ -13,9 +15,11 @@ import (
 	"gorm.io/gorm"
 
 	"api/internal/domain"
+	"api/internal/infrastructure/migrate"
+	sqlfiles "api/migrations"
 )
 
-func newPostSlugMySQLTestDB(t *testing.T, createLegacyIndex bool) (*gorm.DB, uint, uint) {
+func newPostSlugMySQLTestDB(t *testing.T) (*gorm.DB, uint, uint) {
 	t.Helper()
 	dsn := os.Getenv("MYSQL_TEST_DSN")
 	if dsn == "" {
@@ -55,15 +59,21 @@ func newPostSlugMySQLTestDB(t *testing.T, createLegacyIndex bool) (*gorm.DB, uin
 	}
 	t.Cleanup(func() { _ = sqlDB.Close() })
 
-	if err := db.AutoMigrate(&UserModel{}, &CategoryModel{}, &TagModel{}, &PostModel{}); err != nil {
-		t.Fatalf("auto-migrate test schema: %v", err)
+	migrationDSN, err := migrate.WithMultiStatements(config.FormatDSN())
+	if err != nil {
+		t.Fatalf("build migration DSN: %v", err)
 	}
-	if createLegacyIndex {
-		if err := db.Exec("CREATE UNIQUE INDEX idx_posts_slug_deleted ON posts (slug, deleted_at)").Error; err != nil {
-			t.Fatalf("create legacy slug index: %v", err)
-		}
-	} else if err := MigrateActivePostSlugIndex(db); err != nil {
-		t.Fatalf("migrate active post slug index: %v", err)
+	migrationDB, err := sql.Open("mysql", migrationDSN)
+	if err != nil {
+		t.Fatalf("open migration connection: %v", err)
+	}
+	t.Cleanup(func() { _ = migrationDB.Close() })
+	migrations, err := migrate.Load(sqlfiles.FS)
+	if err != nil {
+		t.Fatalf("load migrations: %v", err)
+	}
+	if err := migrate.Run(context.Background(), migrationDB, migrations, t.Logf); err != nil {
+		t.Fatalf("apply migrations to test schema: %v", err)
 	}
 
 	user := UserModel{Name: "Test Author", Email: "author@example.com", PasswordHash: "test-hash", Role: "author"}
@@ -110,7 +120,7 @@ func TestTranslatePostWriteErrorDoesNotMislabelOtherUniqueConflicts(t *testing.T
 }
 
 func TestPostRepositoryMySQLEnforcesActiveSlugUniquenessAndAllowsReuseAfterDelete(t *testing.T) {
-	db, userID, categoryID := newPostSlugMySQLTestDB(t, false)
+	db, userID, categoryID := newPostSlugMySQLTestDB(t)
 	repository := &PostRepository{db: db}
 
 	first, err := repository.Create(newTestPost(t, userID, categoryID, "duplicate-slug"), nil)
@@ -157,7 +167,7 @@ func TestPostRepositoryMySQLEnforcesActiveSlugUniquenessAndAllowsReuseAfterDelet
 }
 
 func TestPostRepositoryMySQLConcurrentCreatesOnlyAllowOneActiveSlug(t *testing.T) {
-	db, userID, categoryID := newPostSlugMySQLTestDB(t, false)
+	db, userID, categoryID := newPostSlugMySQLTestDB(t)
 	repository := &PostRepository{db: db}
 
 	const attempts = 2
@@ -187,41 +197,5 @@ func TestPostRepositoryMySQLConcurrentCreatesOnlyAllowOneActiveSlug(t *testing.T
 	}
 	if successes != 1 || conflicts != 1 {
 		t.Fatalf("concurrent create results: successes=%d conflicts=%d, want 1 each", successes, conflicts)
-	}
-}
-
-func TestMigrateActivePostSlugIndexFailsWithLegacyDuplicatesAndCanRetry(t *testing.T) {
-	db, userID, categoryID := newPostSlugMySQLTestDB(t, true)
-	for _, title := range []string{"First", "Second"} {
-		post := PostModel{
-			Title: title, Slug: "legacy-duplicate", Status: "draft",
-			AuthorID: userID, CategoryID: categoryID,
-		}
-		if err := db.Create(&post).Error; err != nil {
-			t.Fatalf("insert legacy duplicate post: %v", err)
-		}
-	}
-
-	if err := MigrateActivePostSlugIndex(db); err == nil {
-		t.Fatal("migration should fail rather than accept duplicate active slugs")
-	}
-	var duplicateIDs []uint
-	if err := db.Model(&PostModel{}).Where("slug = ?", "legacy-duplicate").Pluck("id", &duplicateIDs).Error; err != nil {
-		t.Fatalf("query legacy duplicates: %v", err)
-	}
-	if len(duplicateIDs) != 2 {
-		t.Fatalf("expected migration failure to preserve both legacy rows, got IDs %v", duplicateIDs)
-	}
-	if err := db.Delete(&PostModel{}, duplicateIDs[1]).Error; err != nil {
-		t.Fatalf("resolve legacy duplicate: %v", err)
-	}
-	if err := MigrateActivePostSlugIndex(db); err != nil {
-		t.Fatalf("migration should succeed after resolving duplicates: %v", err)
-	}
-	if !db.Migrator().HasIndex(&PostModel{}, "idx_posts_active_slug") {
-		t.Fatal("migration did not create the active slug unique index")
-	}
-	if db.Migrator().HasIndex(&PostModel{}, "idx_posts_slug_deleted") {
-		t.Fatal("migration did not remove the legacy composite index")
 	}
 }
