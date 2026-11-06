@@ -128,3 +128,46 @@ func TestRunRefusesLegacyDatabaseUntilBaselined(t *testing.T) {
 		t.Fatal("Baseline should refuse to run twice")
 	}
 }
+
+func TestDropApprovedStatusMovesExistingPostsToReview(t *testing.T) {
+	db := newIsolatedMySQL(t)
+	migrations, err := Load(sqlfiles.FS)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(migrations) < 2 || migrations[1].Name != "0002_drop_approved_status" {
+		t.Fatalf("migration 2 should be 0002_drop_approved_status, got %+v", migrations)
+	}
+
+	// Dựng DB ở trạng thái trước 0002, rồi chèn dữ liệu có status 'approved'.
+	if err := Run(context.Background(), db, migrations[:1], t.Logf); err != nil {
+		t.Fatalf("apply 0001: %v", err)
+	}
+	for _, statement := range []string{
+		"INSERT INTO users (email, password_hash) VALUES ('a@example.com', 'x')",
+		"INSERT INTO categories (name, slug) VALUES ('News', 'news')",
+		"INSERT INTO posts (title, slug, status, author_id, category_id) VALUES " +
+			"('Approved', 'approved-post', 'approved', 1, 1), ('Live', 'live-post', 'published', 1, 1)",
+		"INSERT INTO revisions (post_id, title, slug, status) VALUES (1, 'Approved', 'approved-post', 'approved')",
+	} {
+		if _, err := db.Exec(statement); err != nil {
+			t.Fatalf("seed %q: %v", statement, err)
+		}
+	}
+
+	if err := Run(context.Background(), db, migrations, t.Logf); err != nil {
+		t.Fatalf("apply remaining migrations: %v", err)
+	}
+	if got := countRows(t, db, "SELECT COUNT(*) FROM posts WHERE status = 'review'"); got != 1 {
+		t.Fatalf("posts moved to review = %d, want 1", got)
+	}
+	if got := countRows(t, db, "SELECT COUNT(*) FROM posts WHERE status = 'published'"); got != 1 {
+		t.Fatalf("published posts = %d, want the untouched 1", got)
+	}
+	if got := countRows(t, db, "SELECT COUNT(*) FROM revisions WHERE status = 'approved'"); got != 0 {
+		t.Fatalf("revisions still approved = %d, want 0", got)
+	}
+	if _, err := db.Exec("INSERT INTO posts (title, slug, status) VALUES ('x', 'x', 'approved')"); err == nil {
+		t.Fatal("enum still accepts 'approved' after 0002")
+	}
+}
