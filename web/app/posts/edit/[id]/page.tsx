@@ -426,6 +426,11 @@ function EditPostForm() {
           >
             <option value="draft">Bản nháp (Draft)</option>
             <option value="review">Gửi kiểm duyệt (Review)</option>
+            {userRole === 'author' && ['published', 'scheduled', 'rejected'].includes(status) && (
+              <option value={status}>
+                {status === 'published' ? 'Đã đăng (Published)' : status === 'scheduled' ? 'Hẹn giờ (Scheduled)' : 'Bị từ chối (Rejected)'}
+              </option>
+            )}
             {(userRole === 'admin' || userRole === 'editor') && (
               <>
                 <option value="published">Xuất bản (Published)</option>
@@ -433,6 +438,11 @@ function EditPostForm() {
               </>
             )}
           </select>
+          {userRole === 'author' && (status === 'published' || status === 'scheduled') && (
+            <p className="mt-1 text-xs text-amber-600">
+              Sửa bài đã đăng sẽ chuyển bài về trạng thái chờ duyệt để editor duyệt lại.
+            </p>
+          )}
           {status === 'scheduled' && (
             <input
               type="datetime-local"
