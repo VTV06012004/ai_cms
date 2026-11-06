@@ -41,6 +41,10 @@ func (r *postRepositoryStub) ListDue(time.Time, int) ([]domain.Post, error) {
 	return nil, nil
 }
 
+func (r *postRepositoryStub) PublishIfDue(uint, time.Time) (bool, error) {
+	return false, nil
+}
+
 func TestGetAllPostsRestrictsAnonymousUsersToPublished(t *testing.T) {
 	repository := &postRepositoryStub{}
 	useCase := NewPostUseCase(repository, nil)
