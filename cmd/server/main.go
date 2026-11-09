@@ -52,9 +52,6 @@ func run() error {
 	}
 	defer sqlDB.Close()
 
-	if err := migrate(db); err != nil {
-		return err
-	}
 	if err := protectExistingAdmin(db); err != nil {
 		return err
 	}
@@ -101,7 +98,7 @@ func run() error {
 		delivery.NewMenuHandler(menuUC),
 		delivery.NewRevisionHandler(revisionUC),
 		delivery.NewAuditHandler(auditUC),
-		delivery.NewMediaHandler(mediaUC),
+		delivery.NewMediaHandler(mediaUC, cfg.PublicBaseURL),
 		delivery.NewUserHandler(userUC),
 	)
 
@@ -191,25 +188,6 @@ func protectExistingAdmin(db *gorm.DB) error {
 	}
 	key := uint(1)
 	return db.Model(&admin).Update("root_admin_key", key).Error
-}
-
-func migrate(db *gorm.DB) error {
-	if err := db.AutoMigrate(
-		&persistence.UserModel{},
-		&persistence.CategoryModel{},
-		&persistence.PostModel{},
-		&persistence.TagModel{},
-		&persistence.RevisionModel{},
-		&persistence.AuditLogModel{},
-		&persistence.MenuModel{},
-		&persistence.MenuItemModel{},
-	); err != nil {
-		return err
-	}
-	if err := persistence.MigrateActivePostSlugIndex(db); err != nil {
-		return err
-	}
-	return persistence.MigrateScheduledStatus(db)
 }
 
 func seedDefaults(db *gorm.DB) error {
