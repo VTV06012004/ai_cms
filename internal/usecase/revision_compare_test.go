@@ -14,7 +14,9 @@ type compareRevisionRepository struct {
 
 func (compareRevisionRepository) Create(context.Context, *domain.Revision) error { return nil }
 
-func (compareRevisionRepository) GetByPostID(context.Context, uint) ([]domain.Revision, error) { return nil, nil }
+func (compareRevisionRepository) GetByPostID(context.Context, uint) ([]domain.Revision, error) {
+	return nil, nil
+}
 
 func (r compareRevisionRepository) GetByID(_ context.Context, id uint) (*domain.Revision, error) {
 	revision, ok := r.byID[id]
