@@ -180,11 +180,9 @@ func (uc *PostUseCase) ModeratePost(ctx context.Context, id, moderatorID uint, s
 			return err
 		}
 		data := post.Data()
-		updatedPost, err := repositories.Posts.Update(ctx, post, tagIDs(data.Tags))
-		if err != nil {
+		if _, err := repositories.Posts.Update(ctx, post, tagIDs(data.Tags)); err != nil {
 			return err
 		}
-		post = updatedPost
 		if err := repositories.Audits.RecordLog(ctx, moderatorID, "MODERATE_POST", fmt.Sprintf("Bài viết ID: %d", id), fmt.Sprintf("Đổi trạng thái bài viết thành '%s'", status), ipAddress); err != nil {
 			return fmt.Errorf("không thể ghi audit log: %w", err)
 		}
