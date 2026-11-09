@@ -24,6 +24,7 @@ Next.js frontend, run together with Docker Compose.
    | --- | --- |
    | `JWT_SECRET` | Signing key for login tokens. Required; the API exits without it. |
    | `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD` | Database passwords. Required by Compose. |
+   | `PUBLIC_BASE_URL` | Public origin of the API, used to build image URLs (for example `https://cms.example.com`). Optional: when empty the API returns relative `/uploads/...` paths. Never derived from the request's `Host` header. |
    | `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD` | Credentials of the first admin account (password: at least 6 characters). Used only when the database has no admin yet. |
 
    Use random values, for example `openssl rand -hex 32`. Never commit `.env`.

@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -29,7 +30,10 @@ type Config struct {
 	DatabaseDSN        string
 	JWTSecret          string
 	CORSAllowedOrigins []string
-	InitialAdmin       InitialAdmin
+	// PublicBaseURL là gốc URL công khai của API (ví dụ https://cms.example.com), dùng để dựng
+	// URL ảnh. Để trống thì API trả đường dẫn tương đối /uploads/...
+	PublicBaseURL string
+	InitialAdmin  InitialAdmin
 }
 
 // Load đọc và kiểm tra cấu hình từ môi trường tiến trình.
@@ -43,6 +47,7 @@ func load(getenv func(string) string) (Config, error) {
 		DatabaseDSN:        strings.TrimSpace(getenv("DB_DSN")),
 		JWTSecret:          getenv("JWT_SECRET"),
 		CORSAllowedOrigins: splitList(getenv("CORS_ALLOWED_ORIGINS")),
+		PublicBaseURL:      strings.TrimRight(strings.TrimSpace(getenv("PUBLIC_BASE_URL")), "/"),
 		InitialAdmin: InitialAdmin{
 			Name:     getenv("INITIAL_ADMIN_NAME"),
 			Email:    getenv("INITIAL_ADMIN_EMAIL"),
@@ -62,6 +67,9 @@ func load(getenv func(string) string) (Config, error) {
 	if port, err := strconv.Atoi(cfg.Port); err != nil || port < 1 || port > 65535 {
 		return Config{}, fmt.Errorf("PORT must be a number between 1 and 65535, got %q", cfg.Port)
 	}
+	if err := validatePublicBaseURL(cfg.PublicBaseURL); err != nil {
+		return Config{}, err
+	}
 	if len(cfg.CORSAllowedOrigins) == 0 {
 		cfg.CORSAllowedOrigins = append([]string(nil), defaultCORSOrigins...)
 	}
@@ -77,4 +85,18 @@ func splitList(value string) []string {
 		}
 	}
 	return items
+}
+
+// validatePublicBaseURL cho phép để trống; nếu có thì phải là URL http(s) tuyệt đối, không kèm
+// query hay fragment.
+func validatePublicBaseURL(value string) error {
+	if value == "" {
+		return nil
+	}
+	parsed, err := url.Parse(value)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" ||
+		parsed.RawQuery != "" || parsed.Fragment != "" {
+		return fmt.Errorf("PUBLIC_BASE_URL must be an absolute http(s) URL without query or fragment, got %q", value)
+	}
+	return nil
 }

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import axios from 'axios';
-import { apiUrl } from '@/lib/api';
+import { apiUrl, mediaUrl } from '@/lib/api';
 import type { MediaItem } from '@/app/components/MediaPicker';
 
 export default function MediaLibraryPage() {
@@ -102,7 +102,7 @@ export default function MediaLibraryPage() {
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
         {items.map((item) => (
           <div key={item.name} className="border rounded-lg overflow-hidden bg-white shadow-sm">
-            <img src={item.url} alt={item.name} className="h-36 w-full object-cover bg-gray-100" />
+            <img src={mediaUrl(item.url)} alt={item.name} className="h-36 w-full object-cover bg-gray-100" />
             <div className="p-2 space-y-1">
               <p className="text-xs text-gray-700 truncate" title={item.name}>{item.name}</p>
               <p className="text-[11px] text-gray-400">
@@ -111,7 +111,7 @@ export default function MediaLibraryPage() {
               <div className="flex gap-2 pt-1">
                 <button
                   type="button"
-                  onClick={() => copyUrl(item.url)}
+                  onClick={() => copyUrl(mediaUrl(item.url))}
                   className="flex-1 text-xs px-2 py-1 bg-blue-50 text-blue-600 border border-blue-200 rounded hover:bg-blue-100 cursor-pointer"
                 >
                   Sao chép link
