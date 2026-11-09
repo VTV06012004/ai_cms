@@ -45,6 +45,10 @@ func (r *postUpdateRepository) ListDue(time.Time, int) ([]domain.Post, error) {
 	return nil, nil
 }
 
+func (r *postUpdateRepository) PublishIfDue(uint, time.Time) (bool, error) {
+	return false, nil
+}
+
 type postUpdateRevisionRepository struct{}
 
 func (postUpdateRevisionRepository) Create(*domain.Revision) error { return nil }

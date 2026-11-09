@@ -138,3 +138,21 @@ func (r *PostRepository) ListDue(now time.Time, limit int) ([]domain.Post, error
 	}
 	return result, nil
 }
+
+// PublishIfDue đăng bài hẹn giờ đã đến hạn bằng MỘT câu UPDATE có điều kiện, nên khi nhiều
+// instance (hoặc nhiều lần quét) cùng thấy một bài thì chỉ một lệnh thắng: các lệnh còn lại
+// thấy bài không còn ở trạng thái hẹn giờ và cập nhật 0 dòng.
+//
+// published_at = scheduled_at phải đứng trước scheduled_at = NULL: MySQL đánh giá các phép
+// gán của UPDATE một bảng từ trái sang phải. Quy tắc này trùng với Post.PublishScheduled.
+func (r *PostRepository) PublishIfDue(id uint, now time.Time) (bool, error) {
+	result := r.db.Exec(
+		"UPDATE posts SET status = ?, published_at = scheduled_at, scheduled_at = NULL, updated_at = ? "+
+			"WHERE id = ? AND status = ? AND scheduled_at IS NOT NULL AND scheduled_at <= ? AND deleted_at IS NULL",
+		domain.PostStatusPublished, now, id, domain.PostStatusScheduled, now,
+	)
+	if result.Error != nil {
+		return false, result.Error
+	}
+	return result.RowsAffected == 1, nil
+}

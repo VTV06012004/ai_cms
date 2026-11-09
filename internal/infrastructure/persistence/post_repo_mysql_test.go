@@ -199,3 +199,81 @@ func TestPostRepositoryMySQLConcurrentCreatesOnlyAllowOneActiveSlug(t *testing.T
 		t.Fatalf("concurrent create results: successes=%d conflicts=%d, want 1 each", successes, conflicts)
 	}
 }
+
+func TestPostRepositoryMySQLPublishIfDueOnlyOneConcurrentCallerWins(t *testing.T) {
+	db, userID, categoryID := newPostSlugMySQLTestDB(t)
+	repository := &PostRepository{db: db}
+
+	scheduledAt := time.Now().Add(-time.Minute).Truncate(time.Second)
+	model := PostModel{
+		Title: "Due", Slug: "due-post", Status: string(domain.PostStatusScheduled),
+		AuthorID: userID, CategoryID: categoryID, ScheduledAt: &scheduledAt,
+	}
+	if err := db.Create(&model).Error; err != nil {
+		t.Fatalf("create scheduled post: %v", err)
+	}
+
+	const callers = 8
+	results := make(chan bool, callers)
+	failures := make(chan error, callers)
+	var waitGroup sync.WaitGroup
+	for i := 0; i < callers; i++ {
+		waitGroup.Add(1)
+		go func() {
+			defer waitGroup.Done()
+			won, err := repository.PublishIfDue(model.ID, time.Now())
+			if err != nil {
+				failures <- err
+				return
+			}
+			results <- won
+		}()
+	}
+	waitGroup.Wait()
+	close(results)
+	close(failures)
+
+	for err := range failures {
+		t.Fatalf("PublishIfDue returned error: %v", err)
+	}
+	winners := 0
+	for won := range results {
+		if won {
+			winners++
+		}
+	}
+	if winners != 1 {
+		t.Fatalf("winners = %d, want exactly 1", winners)
+	}
+
+	var stored PostModel
+	if err := db.First(&stored, model.ID).Error; err != nil {
+		t.Fatalf("reload post: %v", err)
+	}
+	if stored.Status != string(domain.PostStatusPublished) || stored.ScheduledAt != nil {
+		t.Fatalf("stored status=%q scheduled_at=%v, want published with no schedule", stored.Status, stored.ScheduledAt)
+	}
+	if stored.PublishedAt == nil || !stored.PublishedAt.Equal(scheduledAt) {
+		t.Fatalf("published_at = %v, want the original scheduled time %v", stored.PublishedAt, scheduledAt)
+	}
+}
+
+func TestPostRepositoryMySQLPublishIfDueSkipsPostsThatAreNotDue(t *testing.T) {
+	db, userID, categoryID := newPostSlugMySQLTestDB(t)
+	repository := &PostRepository{db: db}
+
+	future := time.Now().Add(time.Hour).Truncate(time.Second)
+	posts := []PostModel{
+		{Title: "Future", Slug: "future-post", Status: string(domain.PostStatusScheduled), AuthorID: userID, CategoryID: categoryID, ScheduledAt: &future},
+		{Title: "Draft", Slug: "draft-post", Status: string(domain.PostStatusDraft), AuthorID: userID, CategoryID: categoryID},
+	}
+	for i := range posts {
+		if err := db.Create(&posts[i]).Error; err != nil {
+			t.Fatalf("create post %q: %v", posts[i].Title, err)
+		}
+		won, err := repository.PublishIfDue(posts[i].ID, time.Now())
+		if err != nil || won {
+			t.Fatalf("PublishIfDue(%q) = %v, %v; want false, nil", posts[i].Title, won, err)
+		}
+	}
+}
