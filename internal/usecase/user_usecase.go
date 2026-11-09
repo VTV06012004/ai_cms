@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"api/internal/domain"
 )
@@ -13,6 +14,7 @@ var ErrInvalidCredentials = errors.New("email hoặc mật khẩu không chính 
 type CredentialService interface {
 	HashPassword(password string) (string, error)
 	CheckPasswordHash(password, hash string) bool
+	PasswordHashNeedsUpgrade(hash string) bool
 	GenerateToken(userID uint, email, role string) (string, error)
 }
 
@@ -49,6 +51,15 @@ type LoginResponse struct {
 }
 
 func (uc *UserUseCase) Register(ctx context.Context, input RegisterDTO, ipAddress string) (uint, error) {
+	if strings.TrimSpace(input.Name) == "" {
+		return 0, domain.ErrUserNameRequired
+	}
+	email, err := domain.NewEmail(input.Email)
+	if err != nil {
+		return 0, err
+	}
+	input.Email = string(email)
+
 	hashedPassword, err := uc.credentials.HashPassword(input.Password)
 	if err != nil {
 		return 0, fmt.Errorf("không thể mã hóa mật khẩu: %w", err)
@@ -130,6 +141,15 @@ func (uc *UserUseCase) Login(ctx context.Context, input LoginDTO, ipAddress stri
 	userData := user.Data()
 	if !uc.credentials.CheckPasswordHash(input.Password, userData.PasswordHash) {
 		return nil, ErrInvalidCredentials
+	}
+	if uc.credentials.PasswordHashNeedsUpgrade(userData.PasswordHash) {
+		upgradedHash, err := uc.credentials.HashPassword(input.Password)
+		if err != nil {
+			return nil, fmt.Errorf("không thể nâng cấp mã hóa mật khẩu: %w", err)
+		}
+		if err := uc.userRepo.UpdatePasswordHash(ctx, userData.ID, upgradedHash); err != nil {
+			return nil, fmt.Errorf("không thể lưu mã hóa mật khẩu mới: %w", err)
+		}
 	}
 	token, err := uc.credentials.GenerateToken(userData.ID, string(userData.Email), string(userData.Role))
 	if err != nil {

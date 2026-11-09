@@ -2,6 +2,7 @@ package http
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -10,10 +11,22 @@ import (
 
 type AuthHandler struct {
 	userUseCase *usecase.UserUseCase
+	rateLimiter *authRateLimiter
 }
 
 func NewAuthHandler(uc *usecase.UserUseCase) *AuthHandler {
-	return &AuthHandler{userUseCase: uc}
+	return &AuthHandler{userUseCase: uc, rateLimiter: newAuthRateLimiter()}
+}
+
+func (h *AuthHandler) RateLimitIP() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !h.rateLimiter.allowIP(c.ClientIP(), time.Now()) {
+			writeError(c, errAuthRateLimitExceeded)
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
 }
 
 func (h *AuthHandler) Register(c *gin.Context) {
@@ -24,6 +37,10 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
 		writeInvalidRequest(c)
+		return
+	}
+	if !h.rateLimiter.allowEmail(request.Email, time.Now()) {
+		writeError(c, errAuthRateLimitExceeded)
 		return
 	}
 
@@ -45,6 +62,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&request); err != nil {
 		writeInvalidRequest(c)
+		return
+	}
+	if !h.rateLimiter.allowEmail(request.Email, time.Now()) {
+		writeError(c, errAuthRateLimitExceeded)
 		return
 	}
 

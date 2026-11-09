@@ -109,6 +109,10 @@ without documenting it, so keep the spec in sync.
 - **Login tokens** expire after 15 minutes. A role change therefore takes effect
   for existing tokens no later than their expiration; users must sign in again to
   receive a token with their updated role.
+- **Passwords and authentication limits.** Passwords use Argon2id. Existing PBKDF2
+  hashes are verified and upgraded to Argon2id after a successful login. Login and
+  registration allow up to five requests per minute per IP and email; limits are
+  held in memory per API process.
 - **First admin.** On a database with no admin account, set `INITIAL_ADMIN_EMAIL`
   and `INITIAL_ADMIN_PASSWORD` in `.env` before starting Compose. The API creates
   this root admin once; later starts do not change its credentials or role. Public
