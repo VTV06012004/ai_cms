@@ -4,7 +4,7 @@ import (
 	"api/internal/domain"
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 )
 
@@ -234,7 +234,7 @@ func (uc *PostUseCase) PublishDuePosts(ctx context.Context, now time.Time) (int,
 				fmt.Sprintf("Tự động đăng bài hẹn giờ: '%s'", data.Title), "system")
 		})
 		if err != nil {
-			log.Printf("không thể tự động đăng bài %d: %v", data.ID, err)
+			slog.Error("scheduled post publish failed", "post_id", data.ID, "error", err)
 			continue
 		}
 		if won {

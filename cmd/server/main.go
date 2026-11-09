@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,6 +13,7 @@ import (
 
 	"api/internal/config"
 	delivery "api/internal/delivery/http"
+	"api/internal/delivery/http/middleware"
 	"api/internal/infrastructure/database"
 	"api/internal/infrastructure/persistence"
 	"api/internal/infrastructure/security"
@@ -25,7 +26,8 @@ import (
 
 func main() {
 	if err := run(); err != nil {
-		log.Fatal(err)
+		slog.Error("server stopped", "error", err)
+		os.Exit(1)
 	}
 }
 
@@ -86,7 +88,9 @@ func run() error {
 	auditUC := usecase.NewAuditUseCase(auditRepo)
 	mediaUC := usecase.NewMediaUseCase(storage.NewLocalFileStorage("uploads"))
 
-	router := gin.Default()
+	gin.SetMode(gin.ReleaseMode)
+	router := gin.New()
+	router.Use(middleware.RequestID(), middleware.StructuredLogger(), middleware.StructuredRecovery())
 	router.Use(corsMiddleware(cfg.CORSAllowedOrigins))
 	delivery.RegisterRoutes(
 		router,
@@ -105,7 +109,10 @@ func run() error {
 	server := &http.Server{
 		Addr:              "0.0.0.0:" + cfg.Port,
 		Handler:           router,
+		ReadTimeout:       30 * time.Second,
 		ReadHeaderTimeout: 10 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	// Nhận Ctrl+C hoặc tín hiệu dừng của Docker (SIGTERM).
@@ -118,7 +125,7 @@ func run() error {
 	}()
 	serverErr := make(chan error, 1)
 	go func() {
-		log.Printf("Backend đang chạy tại cổng %s...", cfg.Port)
+		slog.Info("server listening", "port", cfg.Port)
 		serverErr <- server.ListenAndServe()
 	}()
 
@@ -131,7 +138,7 @@ func run() error {
 	case <-ctx.Done():
 	}
 	stop()
-	log.Println("Nhận tín hiệu dừng, đang tắt server...")
+	slog.Info("shutdown signal received")
 
 	// Cho các request đang xử lý tối đa 15 giây để hoàn tất.
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -140,7 +147,7 @@ func run() error {
 		return fmt.Errorf("tắt server không thành công: %w", err)
 	}
 	<-schedulerDone
-	log.Println("Server đã tắt an toàn.")
+	slog.Info("server shut down cleanly")
 	return nil
 }
 
@@ -149,11 +156,11 @@ func runScheduler(ctx context.Context, posts *usecase.PostUseCase) {
 	tick := func() {
 		count, err := posts.PublishDuePosts(ctx, time.Now())
 		if err != nil {
-			log.Printf("quét bài hẹn giờ lỗi: %v", err)
+			slog.Error("scheduled post scan failed", "error", err)
 			return
 		}
 		if count > 0 {
-			log.Printf("đã tự động đăng %d bài hẹn giờ", count)
+			slog.Info("scheduled posts published", "count", count)
 		}
 	}
 	tick()
