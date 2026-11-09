@@ -102,4 +102,17 @@ func (r *UserRepository) UpdateRole(ctx context.Context, userID uint, newRole st
 	return nil
 }
 
+func (r *UserRepository) UpdatePasswordHash(ctx context.Context, userID uint, passwordHash string) error {
+	result := r.db.WithContext(ctx).Model(&UserModel{}).
+		Where("id = ?", userID).
+		Update("password_hash", passwordHash)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return domain.ErrUserNotFound
+	}
+	return nil
+}
+
 var _ domain.UserRepository = (*UserRepository)(nil)

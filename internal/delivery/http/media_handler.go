@@ -2,12 +2,14 @@ package http
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"api/internal/domain"
 	"api/internal/usecase"
 
 	"github.com/gin-gonic/gin"
@@ -35,42 +37,34 @@ func (h *MediaHandler) UploadImage(c *gin.Context) {
 	if err != nil {
 		var maxBytesError *http.MaxBytesError
 		if errors.As(err, &maxBytesError) {
-			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": usecase.ErrImageTooLarge.Error()})
+			writeError(c, usecase.ErrImageTooLarge)
 			return
 		}
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Không tìm thấy file tải lên"})
+		writeError(c, errMissingUploadFile)
 		return
 	}
 	if file.Size > usecase.MaxImageSize {
-		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": usecase.ErrImageTooLarge.Error()})
+		writeError(c, usecase.ErrImageTooLarge)
 		return
 	}
 	source, err := file.Open()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc file tải lên"})
+		writeError(c, fmt.Errorf("open uploaded file: %w", err))
 		return
 	}
 	defer source.Close()
 	content, err := io.ReadAll(io.LimitReader(source, usecase.MaxImageSize+1))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc file tải lên"})
+		writeError(c, fmt.Errorf("read uploaded file: %w", err))
 		return
 	}
 	if len(content) > usecase.MaxImageSize {
-		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": usecase.ErrImageTooLarge.Error()})
+		writeError(c, usecase.ErrImageTooLarge)
 		return
 	}
 	filename, err := h.useCase.UploadImage(c.Request.Context(), file.Filename, content)
 	if err != nil {
-		if errors.Is(err, usecase.ErrInvalidImage) {
-			c.JSON(http.StatusUnsupportedMediaType, gin.H{"error": usecase.ErrInvalidImage.Error()})
-			return
-		}
-		if errors.Is(err, usecase.ErrImageTooLarge) {
-			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": usecase.ErrImageTooLarge.Error()})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu file trên server"})
+		writeError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
@@ -84,7 +78,7 @@ func (h *MediaHandler) ServeUploadedFile(c *gin.Context) {
 	c.Header("Content-Security-Policy", "default-src 'none'; sandbox")
 	filename := filepath.Base(c.Param("filepath"))
 	if filename == "." || filename == string(filepath.Separator) {
-		c.Status(http.StatusNotFound)
+		writeError(c, domain.ErrMediaNotFound)
 		return
 	}
 	c.File(filepath.Join("uploads", filename))

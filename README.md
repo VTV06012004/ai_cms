@@ -89,6 +89,16 @@ docker compose run --rm migrate ./migrate -baseline 1
   post without sending `scheduled_at` keeps the existing schedule; a new schedule must
   be in the future.
 
+## Authentication limits
+
+- Passwords are hashed with Argon2id; legacy PBKDF2 hashes are upgraded after a successful login.
+- `/api/auth/*` allows 5 requests per minute per IP and per email. The counters live in the memory of
+  one API process, so they reset on restart and are not shared between several instances.
+  Failed and successful attempts both count, and anyone can lock an email out for a minute by
+  sending 5 wrong attempts for it.
+- The limiter uses `c.ClientIP()`. Behind a reverse proxy, configure Gin trusted proxies so the
+  real client address is used.
+
 ## Configuration notes
 
 ## API documentation
@@ -109,6 +119,10 @@ without documenting it, so keep the spec in sync.
 - **Login tokens** expire after 15 minutes. A role change therefore takes effect
   for existing tokens no later than their expiration; users must sign in again to
   receive a token with their updated role.
+- **Passwords and authentication limits.** Passwords use Argon2id. Existing PBKDF2
+  hashes are verified and upgraded to Argon2id after a successful login. Login and
+  registration allow up to five requests per minute per IP and email; limits are
+  held in memory per API process.
 - **First admin.** On a database with no admin account, set `INITIAL_ADMIN_EMAIL`
   and `INITIAL_ADMIN_PASSWORD` in `.env` before starting Compose. The API creates
   this root admin once; later starts do not change its credentials or role. Public

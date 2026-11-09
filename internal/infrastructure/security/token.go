@@ -38,6 +38,10 @@ func (c *Credentials) CheckPasswordHash(password, encoded string) bool {
 	return CheckPasswordHash(password, encoded)
 }
 
+func (c *Credentials) PasswordHashNeedsUpgrade(encoded string) bool {
+	return PasswordHashNeedsUpgrade(encoded)
+}
+
 func (c *Credentials) GenerateToken(userID uint, email, role string) (string, error) {
 	claims := Claims{
 		UserID: userID,

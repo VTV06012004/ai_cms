@@ -18,6 +18,7 @@ type UserRepository interface {
 	GetAll(ctx context.Context, page PageRequest) ([]User, int64, error)
 	CountByRole(ctx context.Context, role UserRole) (int64, error)
 	UpdateRole(ctx context.Context, userID uint, newRole string) error
+	UpdatePasswordHash(ctx context.Context, userID uint, passwordHash string) error
 }
 
 type PostRepository interface {

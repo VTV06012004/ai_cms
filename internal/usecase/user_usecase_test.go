@@ -12,6 +12,7 @@ type userRepositoryStub struct {
 	users     map[uint]*domain.User
 	nextID    uint
 	lookupErr error
+	updateErr error
 }
 
 func newUserRepositoryStub() *userRepositoryStub {
@@ -78,6 +79,20 @@ func (r *userRepositoryStub) UpdateRole(_ context.Context, userID uint, newRole 
 	return user.ChangeRole(domain.UserRole(newRole))
 }
 
+func (r *userRepositoryStub) UpdatePasswordHash(_ context.Context, userID uint, passwordHash string) error {
+	if r.updateErr != nil {
+		return r.updateErr
+	}
+	user, ok := r.users[userID]
+	if !ok {
+		return domain.ErrUserNotFound
+	}
+	data := user.Data()
+	data.PasswordHash = passwordHash
+	r.users[userID] = domain.ReconstituteUser(data)
+	return nil
+}
+
 type auditRepositoryStub struct {
 	actions []string
 }
@@ -110,7 +125,44 @@ func (credentialServiceStub) CheckPasswordHash(password, hash string) bool {
 	return hash == "hashed:"+password
 }
 
+func (credentialServiceStub) PasswordHashNeedsUpgrade(string) bool {
+	return false
+}
+
 func (credentialServiceStub) GenerateToken(uint, string, string) (string, error) {
+	return "test-token", nil
+}
+
+type legacyCredentialServiceStub struct{}
+
+func (legacyCredentialServiceStub) HashPassword(password string) (string, error) {
+	return "argon2id:" + password, nil
+}
+
+func (legacyCredentialServiceStub) CheckPasswordHash(password, hash string) bool {
+	return hash == "pbkdf2:"+password
+}
+
+func (legacyCredentialServiceStub) PasswordHashNeedsUpgrade(hash string) bool {
+	return len(hash) >= len("pbkdf2:") && hash[:len("pbkdf2:")] == "pbkdf2:"
+}
+
+func (legacyCredentialServiceStub) GenerateToken(uint, string, string) (string, error) {
+	return "test-token", nil
+}
+
+type countingCredentialServiceStub struct {
+	hashCalls int
+}
+
+func (s *countingCredentialServiceStub) HashPassword(string) (string, error) {
+	s.hashCalls++
+	return "hashed", nil
+}
+
+func (*countingCredentialServiceStub) CheckPasswordHash(string, string) bool { return false }
+func (*countingCredentialServiceStub) PasswordHashNeedsUpgrade(string) bool  { return false }
+func (*countingCredentialServiceStub) GenerateToken(uint, string, string) (string, error) {
 	return "test-token", nil
 }
 
@@ -118,6 +170,51 @@ func newTestUserUseCase(repository *userRepositoryStub, audits *auditRepositoryS
 	return NewUserUseCase(repository, credentialServiceStub{}, unitOfWorkStub{
 		users: repository, audits: audits,
 	})
+}
+
+func TestLoginUpgradesLegacyPasswordHash(t *testing.T) {
+	users := newUserRepositoryStub()
+	legacyUser, err := domain.NewUser("Test User", "user@example.com", "pbkdf2:secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := users.Create(context.Background(), legacyUser)
+	if err != nil {
+		t.Fatal(err)
+	}
+	audits := &auditRepositoryStub{}
+	useCase := NewUserUseCase(users, legacyCredentialServiceStub{}, unitOfWorkStub{
+		users: users, audits: audits,
+	})
+
+	if _, err := useCase.Login(context.Background(), LoginDTO{
+		Email: "user@example.com", Password: "secret",
+	}, "127.0.0.1"); err != nil {
+		t.Fatalf("Login returned error: %v", err)
+	}
+	if got := users.users[created.Data().ID].Data().PasswordHash; got != "argon2id:secret" {
+		t.Fatalf("password hash = %q, want upgraded Argon2id hash", got)
+	}
+}
+
+func TestRegisterValidatesNameAndEmailBeforeHashing(t *testing.T) {
+	users := newUserRepositoryStub()
+	credentials := &countingCredentialServiceStub{}
+	useCase := NewUserUseCase(users, credentials, unitOfWorkStub{users: users})
+
+	if _, err := useCase.Register(context.Background(), RegisterDTO{
+		Name: " ", Email: "invalid", Password: "password",
+	}, "127.0.0.1"); !errors.Is(err, domain.ErrUserNameRequired) {
+		t.Fatalf("blank name error = %v, want ErrUserNameRequired", err)
+	}
+	if _, err := useCase.Register(context.Background(), RegisterDTO{
+		Name: "Test User", Email: "invalid", Password: "password",
+	}, "127.0.0.1"); !errors.Is(err, domain.ErrInvalidEmail) {
+		t.Fatalf("invalid email error = %v, want ErrInvalidEmail", err)
+	}
+	if credentials.hashCalls != 0 {
+		t.Fatalf("HashPassword called %d times for invalid registration data", credentials.hashCalls)
+	}
 }
 
 func TestEnsureInitialAdminCreatesProtectedAdminOnce(t *testing.T) {
@@ -297,5 +394,46 @@ func TestRegisterReportsDuplicateEmail(t *testing.T) {
 	}
 	if _, err := useCase.Register(context.Background(), input, ""); !errors.Is(err, domain.ErrEmailAlreadyExists) {
 		t.Fatalf("expected ErrEmailAlreadyExists, got %v", err)
+	}
+}
+
+func TestRegisterRejectsShortPasswordBeforeHashing(t *testing.T) {
+	users := newUserRepositoryStub()
+	credentials := &countingCredentialServiceStub{}
+	useCase := NewUserUseCase(users, credentials, unitOfWorkStub{users: users})
+
+	_, err := useCase.Register(context.Background(), RegisterDTO{
+		Name: "Test User", Email: "user@example.com", Password: "12345",
+	}, "127.0.0.1")
+	if !errors.Is(err, domain.ErrPasswordTooShort) {
+		t.Fatalf("short password error = %v, want ErrPasswordTooShort", err)
+	}
+	if credentials.hashCalls != 0 {
+		t.Fatalf("HashPassword called %d times for a short password", credentials.hashCalls)
+	}
+}
+
+func TestLoginSucceedsWhenPasswordHashUpgradeFails(t *testing.T) {
+	users := newUserRepositoryStub()
+	legacyUser, err := domain.NewUser("Test User", "user@example.com", "pbkdf2:secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := users.Create(context.Background(), legacyUser)
+	if err != nil {
+		t.Fatal(err)
+	}
+	users.updateErr = errors.New("db unavailable")
+	useCase := NewUserUseCase(users, legacyCredentialServiceStub{}, unitOfWorkStub{
+		users: users, audits: &auditRepositoryStub{},
+	})
+
+	if _, err := useCase.Login(context.Background(), LoginDTO{
+		Email: "user@example.com", Password: "secret",
+	}, "127.0.0.1"); err != nil {
+		t.Fatalf("Login failed because of the hash upgrade: %v", err)
+	}
+	if got := users.users[created.Data().ID].Data().PasswordHash; got != "pbkdf2:secret" {
+		t.Fatalf("password hash = %q, want legacy hash kept", got)
 	}
 }
