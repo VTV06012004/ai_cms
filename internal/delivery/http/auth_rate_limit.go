@@ -7,9 +7,9 @@ import (
 )
 
 const (
-	authRateLimit     = 5
-	authRateWindow    = time.Minute
-	maxRateLimitKeys  = 100_000
+	authRateLimit    = 5
+	authRateWindow   = time.Minute
+	maxRateLimitKeys = 100_000
 	cleanupEveryHits = 256
 )
 
