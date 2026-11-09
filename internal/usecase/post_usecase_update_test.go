@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"api/internal/domain"
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -11,7 +12,7 @@ type postUpdateUnitOfWork struct {
 	repositories TransactionRepositories
 }
 
-func (u postUpdateUnitOfWork) WithinTransaction(work func(TransactionRepositories) error) error {
+func (u postUpdateUnitOfWork) WithinTransaction(_ context.Context, work func(TransactionRepositories) error) error {
 	return work(u.repositories)
 }
 
@@ -19,52 +20,52 @@ type postUpdateRepository struct {
 	post *domain.Post
 }
 
-func (r *postUpdateRepository) GetAll(domain.PostListCriteria, domain.PageRequest) ([]domain.Post, int64, error) {
+func (r *postUpdateRepository) GetAll(context.Context, domain.PostListCriteria, domain.PageRequest) ([]domain.Post, int64, error) {
 	return nil, 0, nil
 }
 
-func (r *postUpdateRepository) GetByID(uint) (*domain.Post, error) {
+func (r *postUpdateRepository) GetByID(context.Context, uint) (*domain.Post, error) {
 	return r.post, nil
 }
 
-func (r *postUpdateRepository) Create(post *domain.Post, _ []uint) (*domain.Post, error) {
+func (r *postUpdateRepository) Create(_ context.Context, post *domain.Post, _ []uint) (*domain.Post, error) {
 	r.post = post
 	return post, nil
 }
 
-func (r *postUpdateRepository) Update(post *domain.Post, _ []uint) (*domain.Post, error) {
+func (r *postUpdateRepository) Update(_ context.Context, post *domain.Post, _ []uint) (*domain.Post, error) {
 	r.post = post
 	return post, nil
 }
 
-func (r *postUpdateRepository) Delete(uint) error {
+func (r *postUpdateRepository) Delete(context.Context, uint) error {
 	return nil
 }
 
-func (r *postUpdateRepository) ListDue(time.Time, int) ([]domain.Post, error) {
+func (r *postUpdateRepository) ListDue(context.Context, time.Time, int) ([]domain.Post, error) {
 	return nil, nil
 }
 
-func (r *postUpdateRepository) PublishIfDue(uint, time.Time) (bool, error) {
+func (r *postUpdateRepository) PublishIfDue(context.Context, uint, time.Time) (bool, error) {
 	return false, nil
 }
 
 type postUpdateRevisionRepository struct{}
 
-func (postUpdateRevisionRepository) Create(*domain.Revision) error { return nil }
-func (postUpdateRevisionRepository) GetByPostID(uint) ([]domain.Revision, error) {
+func (postUpdateRevisionRepository) Create(context.Context, *domain.Revision) error { return nil }
+func (postUpdateRevisionRepository) GetByPostID(context.Context, uint) ([]domain.Revision, error) {
 	return nil, nil
 }
-func (postUpdateRevisionRepository) GetByID(uint) (*domain.Revision, error) {
+func (postUpdateRevisionRepository) GetByID(context.Context, uint) (*domain.Revision, error) {
 	return nil, nil
 }
 
 type postUpdateAuditRepository struct{}
 
-func (postUpdateAuditRepository) RecordLog(uint, string, string, string, string) error {
+func (postUpdateAuditRepository) RecordLog(context.Context, uint, string, string, string, string) error {
 	return nil
 }
-func (postUpdateAuditRepository) GetAll(domain.PageRequest) ([]domain.AuditLog, int64, error) {
+func (postUpdateAuditRepository) GetAll(context.Context, domain.PageRequest) ([]domain.AuditLog, int64, error) {
 	return nil, 0, nil
 }
 
@@ -86,7 +87,7 @@ func publishedPostOf(authorID uint) *domain.Post {
 func TestEditorUpdatingPublishedPostWithoutStatusKeepsItPublished(t *testing.T) {
 	useCase, _ := newUpdateUseCase(publishedPostOf(7))
 
-	updated, err := useCase.UpdatePost(1, 9, string(domain.UserRoleEditor), CreatePostDTO{
+	updated, err := useCase.UpdatePost(context.Background(), 1, 9, string(domain.UserRoleEditor), CreatePostDTO{
 		Title: "Updated", Slug: "updated", Content: "Updated content", CategoryID: 1,
 	}, "")
 	if err != nil {
@@ -105,7 +106,7 @@ func TestAuthorEditingOwnPublishedPostSendsItBackToReview(t *testing.T) {
 	for _, status := range []string{"", string(domain.PostStatusPublished)} {
 		useCase, _ := newUpdateUseCase(publishedPostOf(7))
 
-		updated, err := useCase.UpdatePost(1, 7, string(domain.UserRoleAuthor), CreatePostDTO{
+		updated, err := useCase.UpdatePost(context.Background(), 1, 7, string(domain.UserRoleAuthor), CreatePostDTO{
 			Title: "Updated", Slug: "updated", Content: "Updated content", CategoryID: 1, Status: status,
 		}, "")
 		if err != nil {
@@ -124,7 +125,7 @@ func TestAuthorStillCannotPublishADraft(t *testing.T) {
 	})
 	useCase, _ := newUpdateUseCase(draft)
 
-	_, err := useCase.UpdatePost(1, 7, string(domain.UserRoleAuthor), CreatePostDTO{
+	_, err := useCase.UpdatePost(context.Background(), 1, 7, string(domain.UserRoleAuthor), CreatePostDTO{
 		Title: "Draft", Slug: "draft", CategoryID: 1, Status: string(domain.PostStatusPublished),
 	}, "")
 	if !errors.Is(err, domain.ErrPublishNotAllowed) {
@@ -140,7 +141,7 @@ func TestEditingScheduledPostWithoutScheduledAtKeepsTheSchedule(t *testing.T) {
 	})
 	useCase, _ := newUpdateUseCase(scheduled)
 
-	updated, err := useCase.UpdatePost(1, 9, string(domain.UserRoleEditor), CreatePostDTO{
+	updated, err := useCase.UpdatePost(context.Background(), 1, 9, string(domain.UserRoleEditor), CreatePostDTO{
 		Title: "Soon, edited", Slug: "soon", CategoryID: 1,
 	}, "")
 	if err != nil {
@@ -155,7 +156,7 @@ func TestEditingScheduledPostWithoutScheduledAtKeepsTheSchedule(t *testing.T) {
 func TestEditorPublishingDirectlySetsPublishedAt(t *testing.T) {
 	useCase, _ := newUpdateUseCase(nil)
 
-	created, err := useCase.CreatePost(9, string(domain.UserRoleEditor), CreatePostDTO{
+	created, err := useCase.CreatePost(context.Background(), 9, string(domain.UserRoleEditor), CreatePostDTO{
 		Title: "Live", Slug: "live", CategoryID: 1, Status: string(domain.PostStatusPublished),
 	}, "")
 	if err != nil {
@@ -169,7 +170,7 @@ func TestEditorPublishingDirectlySetsPublishedAt(t *testing.T) {
 		ID: 2, Title: "Draft", Slug: "draft", Status: domain.PostStatusDraft, CategoryID: 1, AuthorID: 9,
 	})
 	useCase, _ = newUpdateUseCase(draft)
-	updated, err := useCase.UpdatePost(2, 9, string(domain.UserRoleEditor), CreatePostDTO{
+	updated, err := useCase.UpdatePost(context.Background(), 2, 9, string(domain.UserRoleEditor), CreatePostDTO{
 		Title: "Draft", Slug: "draft", CategoryID: 1, Status: string(domain.PostStatusPublished),
 	}, "")
 	if err != nil {
@@ -189,7 +190,7 @@ func TestUpdatePostWithStatusChangesStatus(t *testing.T) {
 		Posts: posts, Revisions: postUpdateRevisionRepository{}, Audits: postUpdateAuditRepository{},
 	}})
 
-	updated, err := useCase.UpdatePost(1, 7, string(domain.UserRoleAuthor), CreatePostDTO{
+	updated, err := useCase.UpdatePost(context.Background(), 1, 7, string(domain.UserRoleAuthor), CreatePostDTO{
 		Title: "Updated", Slug: "updated", Content: "Updated content",
 		Status: string(domain.PostStatusDraft), CategoryID: 1,
 	}, "")

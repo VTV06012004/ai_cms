@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"api/internal/domain"
+	"context"
 	"fmt"
 	"time"
 )
@@ -16,26 +17,26 @@ func NewRevisionUseCase(revisions domain.RevisionRepository, posts domain.PostRe
 	return &RevisionUseCase{revRepo: revisions, postRepo: posts, unitOfWork: unitOfWork}
 }
 
-func (uc *RevisionUseCase) GetByPostID(postID, userID uint, userRole string) ([]domain.Revision, error) {
-	post, err := uc.postRepo.GetByID(postID)
+func (uc *RevisionUseCase) GetByPostID(ctx context.Context, postID, userID uint, userRole string) ([]domain.Revision, error) {
+	post, err := uc.postRepo.GetByID(ctx, postID)
 	if err != nil {
 		return nil, err
 	}
 	if !post.CanBeManagedBy(userID, domain.UserRole(userRole)) {
 		return nil, domain.ErrPostAccessDenied
 	}
-	return uc.revRepo.GetByPostID(postID)
+	return uc.revRepo.GetByPostID(ctx, postID)
 }
 
-func (uc *RevisionUseCase) RestoreRevision(revisionID, userID uint, userRole, ipAddress string) (*domain.Post, error) {
+func (uc *RevisionUseCase) RestoreRevision(ctx context.Context, revisionID, userID uint, userRole, ipAddress string) (*domain.Post, error) {
 	var restored *domain.Post
-	err := uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
-		revision, err := repositories.Revisions.GetByID(revisionID)
+	err := uc.unitOfWork.WithinTransaction(ctx, func(repositories TransactionRepositories) error {
+		revision, err := repositories.Revisions.GetByID(ctx, revisionID)
 		if err != nil {
 			return err
 		}
 		revisionData := revision.Data()
-		post, err := repositories.Posts.GetByID(revisionData.PostID)
+		post, err := repositories.Posts.GetByID(ctx, revisionData.PostID)
 		if err != nil {
 			return err
 		}
@@ -48,19 +49,19 @@ func (uc *RevisionUseCase) RestoreRevision(revisionID, userID uint, userRole, ip
 			return fmt.Errorf("dữ liệu revision không hợp lệ: %w", err)
 		}
 		post.SettleStatus(domain.UserRole(userRole), time.Now())
-		if err := repositories.Revisions.Create(previous); err != nil {
+		if err := repositories.Revisions.Create(ctx, previous); err != nil {
 			return fmt.Errorf("không thể lưu snapshot trước khi khôi phục: %w", err)
 		}
-		updatedPost, err := repositories.Posts.Update(post, tagIDs(postData.Tags))
+		updatedPost, err := repositories.Posts.Update(ctx, post, tagIDs(postData.Tags))
 		if err != nil {
 			return fmt.Errorf("không thể khôi phục phiên bản bài viết: %w", err)
 		}
 		post = updatedPost
 		postData = post.Data()
-		if err := repositories.Audits.RecordLog(userID, "RESTORE_REVISION", fmt.Sprintf("Bài viết ID: %d", postData.ID), fmt.Sprintf("Đã khôi phục về Revision ID: %d", revisionData.ID), ipAddress); err != nil {
+		if err := repositories.Audits.RecordLog(ctx, userID, "RESTORE_REVISION", fmt.Sprintf("Bài viết ID: %d", postData.ID), fmt.Sprintf("Đã khôi phục về Revision ID: %d", revisionData.ID), ipAddress); err != nil {
 			return fmt.Errorf("không thể ghi audit log: %w", err)
 		}
-		restored, err = repositories.Posts.GetByID(postData.ID)
+		restored, err = repositories.Posts.GetByID(ctx, postData.ID)
 		return err
 	})
 	if err != nil {
@@ -70,13 +71,13 @@ func (uc *RevisionUseCase) RestoreRevision(revisionID, userID uint, userRole, ip
 }
 
 // CompareRevisions so sánh phiên bản fromID với phiên bản toID; toID = 0 nghĩa là bản hiện tại của bài viết.
-func (uc *RevisionUseCase) CompareRevisions(fromID, toID, userID uint, userRole string) (*domain.RevisionComparison, error) {
-	from, err := uc.revRepo.GetByID(fromID)
+func (uc *RevisionUseCase) CompareRevisions(ctx context.Context, fromID, toID, userID uint, userRole string) (*domain.RevisionComparison, error) {
+	from, err := uc.revRepo.GetByID(ctx, fromID)
 	if err != nil {
 		return nil, err
 	}
 	fromData := from.Data()
-	post, err := uc.postRepo.GetByID(fromData.PostID)
+	post, err := uc.postRepo.GetByID(ctx, fromData.PostID)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +89,7 @@ func (uc *RevisionUseCase) CompareRevisions(fromID, toID, userID uint, userRole 
 	if toID == 0 {
 		toData = domain.RevisionDataFromPost(post.Data())
 	} else {
-		to, err := uc.revRepo.GetByID(toID)
+		to, err := uc.revRepo.GetByID(ctx, toID)
 		if err != nil {
 			return nil, err
 		}
