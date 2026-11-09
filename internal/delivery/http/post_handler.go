@@ -25,7 +25,7 @@ func (h *PostHandler) GetAll(c *gin.Context) {
 	userIDValue, _ := c.Get("user_id")
 	userID, _ := userIDValue.(uint)
 
-	posts, info, err := h.useCase.GetAllPosts(userRole, userID, parsePage(c))
+	posts, info, err := h.useCase.GetAllPosts(c.Request.Context(), userRole, userID, parsePage(c))
 	if err != nil {
 		writeError(c, err)
 		return
@@ -45,7 +45,7 @@ func (h *PostHandler) GetByID(c *gin.Context) {
 	userIDValue, _ := c.Get("user_id")
 	userID, _ := userIDValue.(uint)
 
-	post, err := h.useCase.GetPostByID(uint(id), userRole, userID)
+	post, err := h.useCase.GetPostByID(c.Request.Context(), uint(id), userRole, userID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy bài viết"})
 		return
@@ -82,7 +82,7 @@ func (h *PostHandler) Create(c *gin.Context) {
 		return
 	}
 
-	post, err := h.useCase.CreatePost(userID, userRole, usecase.CreatePostDTO{
+	post, err := h.useCase.CreatePost(c.Request.Context(), userID, userRole, usecase.CreatePostDTO{
 		Title: request.Title, Slug: request.Slug, Content: request.Content,
 		Status: request.Status, CategoryID: request.CategoryID, TagIDs: request.TagIDs,
 		ScheduledAt: request.ScheduledAt,
@@ -126,7 +126,7 @@ func (h *PostHandler) Update(c *gin.Context) {
 		return
 	}
 
-	updatedPost, err := h.useCase.UpdatePost(uint(id), userID, userRole, usecase.CreatePostDTO{
+	updatedPost, err := h.useCase.UpdatePost(c.Request.Context(), uint(id), userID, userRole, usecase.CreatePostDTO{
 		Title: request.Title, Slug: request.Slug, Content: request.Content,
 		Status: request.Status, CategoryID: request.CategoryID, TagIDs: request.TagIDs,
 		ScheduledAt: request.ScheduledAt,
@@ -151,7 +151,7 @@ func (h *PostHandler) Delete(c *gin.Context) {
 	userRoleValue, _ := c.Get("user_role")
 	userRole, _ := userRoleValue.(string)
 
-	if err := h.useCase.DeletePost(uint(id), userID, userRole, c.ClientIP()); err != nil {
+	if err := h.useCase.DeletePost(c.Request.Context(), uint(id), userID, userRole, c.ClientIP()); err != nil {
 		writeError(c, err)
 		return
 	}
@@ -178,7 +178,7 @@ func (h *PostHandler) Moderate(c *gin.Context) {
 
 	userIDValue, _ := c.Get("user_id")
 	userID, _ := userIDValue.(uint)
-	post, err := h.useCase.ModeratePost(uint(id), userID, req.Status, req.RejectionReason, c.ClientIP())
+	post, err := h.useCase.ModeratePost(c.Request.Context(), uint(id), userID, req.Status, req.RejectionReason, c.ClientIP())
 	if err != nil {
 		writeError(c, err)
 		return
