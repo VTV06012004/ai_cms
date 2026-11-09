@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -25,14 +26,14 @@ func (r *categoryRepositoryStub) add(t *testing.T, name, slug string, parentID *
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := r.Create(category)
+	created, err := r.Create(context.Background(), category)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return created.Data().ID
 }
 
-func (r *categoryRepositoryStub) GetAll() ([]domain.Category, error) {
+func (r *categoryRepositoryStub) GetAll(context.Context) ([]domain.Category, error) {
 	all := make([]domain.Category, 0, len(r.items))
 	for _, category := range r.items {
 		all = append(all, *category)
@@ -40,7 +41,7 @@ func (r *categoryRepositoryStub) GetAll() ([]domain.Category, error) {
 	return all, nil
 }
 
-func (r *categoryRepositoryStub) GetByID(id uint) (*domain.Category, error) {
+func (r *categoryRepositoryStub) GetByID(_ context.Context, id uint) (*domain.Category, error) {
 	category, ok := r.items[id]
 	if !ok {
 		return nil, domain.ErrCategoryNotFound
@@ -48,7 +49,7 @@ func (r *categoryRepositoryStub) GetByID(id uint) (*domain.Category, error) {
 	return domain.ReconstituteCategory(category.Data()), nil
 }
 
-func (r *categoryRepositoryStub) Create(category *domain.Category) (*domain.Category, error) {
+func (r *categoryRepositoryStub) Create(_ context.Context, category *domain.Category) (*domain.Category, error) {
 	data := category.Data()
 	data.ID = r.nextID
 	r.nextID++
@@ -57,21 +58,21 @@ func (r *categoryRepositoryStub) Create(category *domain.Category) (*domain.Cate
 	return created, nil
 }
 
-func (r *categoryRepositoryStub) Update(category *domain.Category) (*domain.Category, error) {
+func (r *categoryRepositoryStub) Update(_ context.Context, category *domain.Category) (*domain.Category, error) {
 	r.items[category.Data().ID] = category
 	return category, nil
 }
 
-func (r *categoryRepositoryStub) Delete(id uint) error {
+func (r *categoryRepositoryStub) Delete(_ context.Context, id uint) error {
 	delete(r.items, id)
 	return nil
 }
 
-func (r *categoryRepositoryStub) CountPosts(id uint) (int64, error) {
+func (r *categoryRepositoryStub) CountPosts(_ context.Context, id uint) (int64, error) {
 	return r.posts[id], nil
 }
 
-func (r *categoryRepositoryStub) CountChildren(id uint) (int64, error) {
+func (r *categoryRepositoryStub) CountChildren(_ context.Context, id uint) (int64, error) {
 	var count int64
 	for _, category := range r.items {
 		if parent := category.Data().ParentID; parent != nil && *parent == id {
@@ -86,7 +87,7 @@ type catalogUnitOfWork struct {
 	audits     domain.AuditRepository
 }
 
-func (u catalogUnitOfWork) WithinTransaction(work func(TransactionRepositories) error) error {
+func (u catalogUnitOfWork) WithinTransaction(_ context.Context, work func(TransactionRepositories) error) error {
 	return work(TransactionRepositories{Categories: u.categories, Audits: u.audits})
 }
 
@@ -99,7 +100,7 @@ func TestCreateCategoryRecordsAuditAndRejectsUnknownParent(t *testing.T) {
 	audits := &auditRepositoryStub{}
 	useCase := newCategoryUseCaseForTest(repo, audits)
 
-	created, err := useCase.CreateCategory(1, CategoryInputDTO{Name: "News", Slug: "news", Description: "Tin tức"}, "")
+	created, err := useCase.CreateCategory(context.Background(), 1, CategoryInputDTO{Name: "News", Slug: "news", Description: "Tin tức"}, "")
 	if err != nil {
 		t.Fatalf("CreateCategory returned error: %v", err)
 	}
@@ -111,7 +112,7 @@ func TestCreateCategoryRecordsAuditAndRejectsUnknownParent(t *testing.T) {
 	}
 
 	missing := uint(99)
-	_, err = useCase.CreateCategory(1, CategoryInputDTO{Name: "X", Slug: "x", ParentID: &missing}, "")
+	_, err = useCase.CreateCategory(context.Background(), 1, CategoryInputDTO{Name: "X", Slug: "x", ParentID: &missing}, "")
 	if !errors.Is(err, domain.ErrInvalidCategoryParent) {
 		t.Fatalf("error = %v, want ErrInvalidCategoryParent", err)
 	}
@@ -127,12 +128,12 @@ func TestUpdateCategoryRejectsParentCycles(t *testing.T) {
 	child := repo.add(t, "Child", "child", &root)
 	grandchild := repo.add(t, "Grand", "grand", &child)
 
-	_, err := useCase.UpdateCategory(1, root, CategoryInputDTO{Name: "Root", Slug: "root", ParentID: &root}, "")
+	_, err := useCase.UpdateCategory(context.Background(), 1, root, CategoryInputDTO{Name: "Root", Slug: "root", ParentID: &root}, "")
 	if !errors.Is(err, domain.ErrInvalidCategoryParent) {
 		t.Fatalf("own parent: error = %v, want ErrInvalidCategoryParent", err)
 	}
 
-	_, err = useCase.UpdateCategory(1, root, CategoryInputDTO{Name: "Root", Slug: "root", ParentID: &grandchild}, "")
+	_, err = useCase.UpdateCategory(context.Background(), 1, root, CategoryInputDTO{Name: "Root", Slug: "root", ParentID: &grandchild}, "")
 	if !errors.Is(err, domain.ErrInvalidCategoryParent) {
 		t.Fatalf("descendant as parent: error = %v, want ErrInvalidCategoryParent", err)
 	}
@@ -148,7 +149,7 @@ func TestUpdateCategoryChangesFieldsAndReportsMissing(t *testing.T) {
 	root := repo.add(t, "Root", "root", nil)
 	other := repo.add(t, "Other", "other", nil)
 
-	updated, err := useCase.UpdateCategory(1, other, CategoryInputDTO{Name: "Renamed", Slug: "renamed", ParentID: &root}, "")
+	updated, err := useCase.UpdateCategory(context.Background(), 1, other, CategoryInputDTO{Name: "Renamed", Slug: "renamed", ParentID: &root}, "")
 	if err != nil {
 		t.Fatalf("UpdateCategory returned error: %v", err)
 	}
@@ -160,7 +161,7 @@ func TestUpdateCategoryChangesFieldsAndReportsMissing(t *testing.T) {
 		t.Fatalf("audit actions = %v, want [UPDATE_CATEGORY]", audits.actions)
 	}
 
-	_, err = useCase.UpdateCategory(1, 99, CategoryInputDTO{Name: "X", Slug: "x"}, "")
+	_, err = useCase.UpdateCategory(context.Background(), 1, 99, CategoryInputDTO{Name: "X", Slug: "x"}, "")
 	if !errors.Is(err, domain.ErrCategoryNotFound) {
 		t.Fatalf("error = %v, want ErrCategoryNotFound", err)
 	}
@@ -176,17 +177,17 @@ func TestDeleteCategoryProtectsCategoriesInUse(t *testing.T) {
 	repo.add(t, "Child", "child", &parent)
 	free := repo.add(t, "Free", "free", nil)
 
-	if err := useCase.DeleteCategory(1, withPosts, ""); !errors.Is(err, domain.ErrCategoryInUse) {
+	if err := useCase.DeleteCategory(context.Background(), 1, withPosts, ""); !errors.Is(err, domain.ErrCategoryInUse) {
 		t.Fatalf("category with posts: error = %v, want ErrCategoryInUse", err)
 	}
-	if err := useCase.DeleteCategory(1, parent, ""); !errors.Is(err, domain.ErrCategoryHasChildren) {
+	if err := useCase.DeleteCategory(context.Background(), 1, parent, ""); !errors.Is(err, domain.ErrCategoryHasChildren) {
 		t.Fatalf("category with children: error = %v, want ErrCategoryHasChildren", err)
 	}
 	if len(audits.actions) != 0 {
 		t.Fatalf("audit recorded for rejected deletes: %v", audits.actions)
 	}
 
-	if err := useCase.DeleteCategory(1, free, ""); err != nil {
+	if err := useCase.DeleteCategory(context.Background(), 1, free, ""); err != nil {
 		t.Fatalf("DeleteCategory returned error: %v", err)
 	}
 	if _, exists := repo.items[free]; exists {

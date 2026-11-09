@@ -52,9 +52,6 @@ func run() error {
 	}
 	defer sqlDB.Close()
 
-	if err := migrate(db); err != nil {
-		return err
-	}
 	if err := protectExistingAdmin(db); err != nil {
 		return err
 	}
@@ -74,7 +71,7 @@ func run() error {
 	auditRepo := persistence.NewAuditRepository(db)
 	unitOfWork := persistence.NewUnitOfWork(db)
 	userUC := usecase.NewUserUseCase(userRepo, credentials, unitOfWork)
-	if err := userUC.EnsureInitialAdmin(usecase.InitialAdminConfig{
+	if err := userUC.EnsureInitialAdmin(context.Background(), usecase.InitialAdminConfig{
 		Name:     cfg.InitialAdmin.Name,
 		Email:    cfg.InitialAdmin.Email,
 		Password: cfg.InitialAdmin.Password,
@@ -101,7 +98,7 @@ func run() error {
 		delivery.NewMenuHandler(menuUC),
 		delivery.NewRevisionHandler(revisionUC),
 		delivery.NewAuditHandler(auditUC),
-		delivery.NewMediaHandler(mediaUC),
+		delivery.NewMediaHandler(mediaUC, cfg.PublicBaseURL),
 		delivery.NewUserHandler(userUC),
 	)
 
@@ -150,7 +147,7 @@ func run() error {
 // runScheduler quét bài hẹn giờ mỗi phút cho đến khi ctx bị hủy.
 func runScheduler(ctx context.Context, posts *usecase.PostUseCase) {
 	tick := func() {
-		count, err := posts.PublishDuePosts(time.Now())
+		count, err := posts.PublishDuePosts(ctx, time.Now())
 		if err != nil {
 			log.Printf("quét bài hẹn giờ lỗi: %v", err)
 			return
@@ -191,25 +188,6 @@ func protectExistingAdmin(db *gorm.DB) error {
 	}
 	key := uint(1)
 	return db.Model(&admin).Update("root_admin_key", key).Error
-}
-
-func migrate(db *gorm.DB) error {
-	if err := db.AutoMigrate(
-		&persistence.UserModel{},
-		&persistence.CategoryModel{},
-		&persistence.PostModel{},
-		&persistence.TagModel{},
-		&persistence.RevisionModel{},
-		&persistence.AuditLogModel{},
-		&persistence.MenuModel{},
-		&persistence.MenuItemModel{},
-	); err != nil {
-		return err
-	}
-	if err := persistence.MigrateActivePostSlugIndex(db); err != nil {
-		return err
-	}
-	return persistence.MigrateScheduledStatus(db)
 }
 
 func seedDefaults(db *gorm.DB) error {

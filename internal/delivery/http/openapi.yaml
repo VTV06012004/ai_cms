@@ -576,7 +576,10 @@ paths:
                 type: object
                 properties:
                   message: { type: string }
-                  url: { type: string, example: 'http://localhost:8081/uploads/1730000000000000000.png' }
+                  url:
+                    type: string
+                    description: URL tuyệt đối nếu cấu hình PUBLIC_BASE_URL, nếu không là đường dẫn tương đối /uploads/...
+                    example: 'http://localhost:8081/uploads/1730000000000000000.png'
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '413':
