@@ -2,6 +2,7 @@ package persistence
 
 import (
 	"api/internal/domain"
+	"context"
 
 	"gorm.io/gorm"
 )
@@ -14,14 +15,14 @@ func NewRevisionRepository(db *gorm.DB) domain.RevisionRepository {
 	return &RevisionRepository{db: db}
 }
 
-func (r *RevisionRepository) Create(revision *domain.Revision) error {
+func (r *RevisionRepository) Create(ctx context.Context, revision *domain.Revision) error {
 	model := revisionModelFromDomain(revision)
-	return r.db.Create(&model).Error
+	return r.db.WithContext(ctx).Create(&model).Error
 }
 
-func (r *RevisionRepository) GetByPostID(postID uint) ([]domain.Revision, error) {
+func (r *RevisionRepository) GetByPostID(ctx context.Context, postID uint) ([]domain.Revision, error) {
 	var models []RevisionModel
-	if err := r.db.Preload("User").Where("post_id = ?", postID).Order("created_at DESC").Find(&models).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("User").Where("post_id = ?", postID).Order("created_at DESC").Find(&models).Error; err != nil {
 		return nil, err
 	}
 	result := make([]domain.Revision, 0, len(models))
@@ -31,9 +32,9 @@ func (r *RevisionRepository) GetByPostID(postID uint) ([]domain.Revision, error)
 	return result, nil
 }
 
-func (r *RevisionRepository) GetByID(id uint) (*domain.Revision, error) {
+func (r *RevisionRepository) GetByID(ctx context.Context, id uint) (*domain.Revision, error) {
 	var model RevisionModel
-	if err := r.db.Preload("User").First(&model, id).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("User").First(&model, id).Error; err != nil {
 		return nil, notFoundOr(err, domain.ErrRevisionNotFound)
 	}
 
