@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"api/internal/domain"
 )
@@ -59,6 +60,9 @@ func (uc *UserUseCase) Register(ctx context.Context, input RegisterDTO, ipAddres
 		return 0, err
 	}
 	input.Email = string(email)
+	if utf8.RuneCountInString(input.Password) < MinPasswordLength {
+		return 0, domain.ErrPasswordTooShort
+	}
 
 	hashedPassword, err := uc.credentials.HashPassword(input.Password)
 	if err != nil {
@@ -93,8 +97,8 @@ func (uc *UserUseCase) EnsureInitialAdmin(ctx context.Context, config InitialAdm
 	if config.Email == "" || config.Password == "" {
 		return errors.New("cần cấu hình INITIAL_ADMIN_EMAIL và INITIAL_ADMIN_PASSWORD khi chưa có tài khoản admin")
 	}
-	if len(config.Password) < 6 {
-		return errors.New("INITIAL_ADMIN_PASSWORD phải có ít nhất 6 ký tự")
+	if utf8.RuneCountInString(config.Password) < MinPasswordLength {
+		return fmt.Errorf("INITIAL_ADMIN_PASSWORD phải có ít nhất %d ký tự", MinPasswordLength)
 	}
 	if config.Name == "" {
 		config.Name = "Administrator"
@@ -129,6 +133,9 @@ func (uc *UserUseCase) EnsureInitialAdmin(ctx context.Context, config InitialAdm
 	}
 	return nil
 }
+
+// MinPasswordLength là độ dài tối thiểu (tính theo ký tự) của mật khẩu.
+const MinPasswordLength = 6
 
 func (uc *UserUseCase) Login(ctx context.Context, input LoginDTO, ipAddress string) (*LoginResponse, error) {
 	user, err := uc.userRepo.GetByEmail(ctx, input.Email)

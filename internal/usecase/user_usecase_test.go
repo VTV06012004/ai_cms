@@ -157,7 +157,7 @@ func (s *countingCredentialServiceStub) HashPassword(string) (string, error) {
 }
 
 func (*countingCredentialServiceStub) CheckPasswordHash(string, string) bool { return false }
-func (*countingCredentialServiceStub) PasswordHashNeedsUpgrade(string) bool { return false }
+func (*countingCredentialServiceStub) PasswordHashNeedsUpgrade(string) bool  { return false }
 func (*countingCredentialServiceStub) GenerateToken(uint, string, string) (string, error) {
 	return "test-token", nil
 }
@@ -390,5 +390,21 @@ func TestRegisterReportsDuplicateEmail(t *testing.T) {
 	}
 	if _, err := useCase.Register(context.Background(), input, ""); !errors.Is(err, domain.ErrEmailAlreadyExists) {
 		t.Fatalf("expected ErrEmailAlreadyExists, got %v", err)
+	}
+}
+
+func TestRegisterRejectsShortPasswordBeforeHashing(t *testing.T) {
+	users := newUserRepositoryStub()
+	credentials := &countingCredentialServiceStub{}
+	useCase := NewUserUseCase(users, credentials, unitOfWorkStub{users: users})
+
+	_, err := useCase.Register(context.Background(), RegisterDTO{
+		Name: "Test User", Email: "user@example.com", Password: "12345",
+	}, "127.0.0.1")
+	if !errors.Is(err, domain.ErrPasswordTooShort) {
+		t.Fatalf("short password error = %v, want ErrPasswordTooShort", err)
+	}
+	if credentials.hashCalls != 0 {
+		t.Fatalf("HashPassword called %d times for a short password", credentials.hashCalls)
 	}
 }

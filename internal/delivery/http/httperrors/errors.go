@@ -72,6 +72,7 @@ var errorRules = []errorRule{
 	{domain.ErrInvalidRole, http.StatusBadRequest},
 	{domain.ErrUserNameRequired, http.StatusBadRequest},
 	{domain.ErrInvalidEmail, http.StatusBadRequest},
+	{domain.ErrPasswordTooShort, http.StatusBadRequest},
 	{domain.ErrPostTitleRequired, http.StatusBadRequest},
 	{domain.ErrPostSlugRequired, http.StatusBadRequest},
 	{domain.ErrPostCategoryRequired, http.StatusBadRequest},
