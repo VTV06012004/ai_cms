@@ -14,7 +14,7 @@ type PostModel struct {
 	Slug            string    `gorm:"size:255;not null"`
 	Content         string    `gorm:"type:longtext"`
 	Excerpt         string    `gorm:"type:text"`
-	Status          string    `gorm:"type:enum('draft','review','approved','rejected','published','scheduled');default:'draft'"`
+	Status          string    `gorm:"type:enum('draft','review','rejected','published','scheduled');default:'draft'"`
 	RejectionReason string    `gorm:"type:text"`
 	AuthorID        uint      `gorm:"index"`
 	Author          UserModel `gorm:"foreignKey:AuthorID"`

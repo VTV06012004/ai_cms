@@ -24,6 +24,7 @@ Next.js frontend, run together with Docker Compose.
    | --- | --- |
    | `JWT_SECRET` | Signing key for login tokens. Required; the API exits without it. |
    | `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD` | Database passwords. Required by Compose. |
+   | `PUBLIC_BASE_URL` | Public origin of the API, used to build image URLs (for example `https://cms.example.com`). Optional: when empty the API returns relative `/uploads/...` paths. Never derived from the request's `Host` header. |
    | `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD` | Credentials of the first admin account (password: at least 6 characters). Used only when the database has no admin yet. |
 
    Use random values, for example `openssl rand -hex 32`. Never commit `.env`.
@@ -50,6 +51,54 @@ docker compose down
 To also delete the database and start again from an empty one, add `-v`
 (`docker compose down -v`).
 
+## Database migrations
+
+The schema is managed by versioned SQL files in `migrations/` (`0001_init.sql`, `0002_...`).
+The API never changes the schema when it starts; a separate command applies the files:
+
+- `docker compose up` runs the `migrate` service first and starts the API only after it succeeds.
+- Manually: `docker compose run --rm migrate` (or `make migrate` with `DB_DSN` set).
+
+Rules:
+
+- Never edit a migration that has already run anywhere. `migrate` stores a checksum of every
+  applied file and refuses to continue if one changed. Add a new file with the next number instead.
+- In production, run the migration **before** deploying the new API binary.
+- MySQL commits DDL statements immediately, so a migration that fails halfway is not rolled back.
+  Fix the database by hand, then run `migrate` again.
+
+### Existing database created before migrations
+
+A database created by the old AutoMigrate startup has tables but no `schema_migrations` table,
+and `migrate` refuses to touch it. Make sure it is on the latest schema, then record `0001`
+as applied without running it:
+
+```sh
+docker compose run --rm migrate ./migrate -baseline 1
+```
+
+## Business rules
+
+- **Editing a published post.** When an author edits a post that is already published
+  (or scheduled), the post goes back to `review` and an editor must approve it again.
+  Editors and admins can edit published posts without losing their status.
+- **Publication time.** `published_at` is set the first time a post becomes published,
+  whether through moderation, direct publishing by an editor or admin, or a scheduled
+  publication.
+- **Scheduled posts.** Only editors and admins can schedule a post. Editing a scheduled
+  post without sending `scheduled_at` keeps the existing schedule; a new schedule must
+  be in the future.
+
+## Authentication limits
+
+- Passwords are hashed with Argon2id; legacy PBKDF2 hashes are upgraded after a successful login.
+- `/api/auth/*` allows 5 requests per minute per IP and per email. The counters live in the memory of
+  one API process, so they reset on restart and are not shared between several instances.
+  Failed and successful attempts both count, and anyone can lock an email out for a minute by
+  sending 5 wrong attempts for it.
+- The limiter uses `c.ClientIP()`. Behind a reverse proxy, configure Gin trusted proxies so the
+  real client address is used.
+
 ## Configuration notes
 
 ## API documentation
@@ -70,6 +119,13 @@ without documenting it, so keep the spec in sync.
 - **Login tokens** expire after 15 minutes. A role change therefore takes effect
   for existing tokens no later than their expiration; users must sign in again to
   receive a token with their updated role.
+- **Passwords and authentication limits.** Passwords use Argon2id. Existing PBKDF2
+  hashes are verified and upgraded to Argon2id after a successful login. Login and
+  registration allow up to five requests per minute per IP and email; limits are
+  held in memory per API process.
+- **HTTP operations.** The API runs Gin in release mode, emits structured request
+  logs with an `X-Request-ID` response header, and applies request read/write/idle
+  timeouts.
 - **First admin.** On a database with no admin account, set `INITIAL_ADMIN_EMAIL`
   and `INITIAL_ADMIN_PASSWORD` in `.env` before starting Compose. The API creates
   this root admin once; later starts do not change its credentials or role. Public
@@ -124,9 +180,9 @@ runs the tests before building the server.
 On Windows without a local Go install, run Go commands through Docker from the
 repository root:
 
-    docker run --rm -v "%cd%":/src -w /src golang:1.21 gofmt -l .
-    docker run --rm -v "%cd%":/src -w /src golang:1.21 gofmt -w .
-    docker run --rm -v "%cd%":/src -w /src golang:1.21 go test ./...
+    docker run --rm -v "%cd%":/src -w /src golang:1.23 gofmt -l .
+    docker run --rm -v "%cd%":/src -w /src golang:1.23 gofmt -w .
+    docker run --rm -v "%cd%":/src -w /src golang:1.23 go test ./...
 
 `gofmt -l .` lists files that are not formatted (the Docker build fails if there are
 any), and `gofmt -w .` fixes them in place. Run the last two before committing.
