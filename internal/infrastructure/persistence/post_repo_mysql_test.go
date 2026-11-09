@@ -123,15 +123,15 @@ func TestPostRepositoryMySQLEnforcesActiveSlugUniquenessAndAllowsReuseAfterDelet
 	db, userID, categoryID := newPostSlugMySQLTestDB(t)
 	repository := &PostRepository{db: db}
 
-	first, err := repository.Create(newTestPost(t, userID, categoryID, "duplicate-slug"), nil)
+	first, err := repository.Create(context.Background(), newTestPost(t, userID, categoryID, "duplicate-slug"), nil)
 	if err != nil {
 		t.Fatalf("create first post: %v", err)
 	}
-	if _, err := repository.Create(newTestPost(t, userID, categoryID, "duplicate-slug"), nil); !errors.Is(err, domain.ErrPostSlugAlreadyExists) {
+	if _, err := repository.Create(context.Background(), newTestPost(t, userID, categoryID, "duplicate-slug"), nil); !errors.Is(err, domain.ErrPostSlugAlreadyExists) {
 		t.Fatalf("duplicate active slug error = %v, want ErrPostSlugAlreadyExists", err)
 	}
 
-	second, err := repository.Create(newTestPost(t, userID, categoryID, "other-slug"), nil)
+	second, err := repository.Create(context.Background(), newTestPost(t, userID, categoryID, "other-slug"), nil)
 	if err != nil {
 		t.Fatalf("create second post: %v", err)
 	}
@@ -139,7 +139,7 @@ func TestPostRepositoryMySQLEnforcesActiveSlugUniquenessAndAllowsReuseAfterDelet
 	if err := second.Update("Updated title", "duplicate-slug", "updated content", domain.PostStatusDraft, categoryID); err != nil {
 		t.Fatalf("update post domain data: %v", err)
 	}
-	if _, err := repository.Update(second, nil); !errors.Is(err, domain.ErrPostSlugAlreadyExists) {
+	if _, err := repository.Update(context.Background(), second, nil); !errors.Is(err, domain.ErrPostSlugAlreadyExists) {
 		t.Fatalf("duplicate slug on update error = %v, want ErrPostSlugAlreadyExists", err)
 	}
 
@@ -147,21 +147,21 @@ func TestPostRepositoryMySQLEnforcesActiveSlugUniquenessAndAllowsReuseAfterDelet
 	if err := second.Update("Updated title", "other-slug", "updated content", domain.PostStatusDraft, categoryID); err != nil {
 		t.Fatalf("update post without changing slug: %v", err)
 	}
-	if _, err := repository.Update(second, nil); err != nil {
+	if _, err := repository.Update(context.Background(), second, nil); err != nil {
 		t.Fatalf("updating post with its existing slug should succeed: %v", err)
 	}
 
-	if err := repository.Delete(first.Data().ID); err != nil {
+	if err := repository.Delete(context.Background(), first.Data().ID); err != nil {
 		t.Fatalf("soft-delete first post: %v", err)
 	}
-	reused, err := repository.Create(newTestPost(t, userID, categoryID, "duplicate-slug"), nil)
+	reused, err := repository.Create(context.Background(), newTestPost(t, userID, categoryID, "duplicate-slug"), nil)
 	if err != nil {
 		t.Fatalf("reuse slug after deleting previous post: %v", err)
 	}
-	if err := repository.Delete(reused.Data().ID); err != nil {
+	if err := repository.Delete(context.Background(), reused.Data().ID); err != nil {
 		t.Fatalf("soft-delete reused post: %v", err)
 	}
-	if _, err := repository.Create(newTestPost(t, userID, categoryID, "duplicate-slug"), nil); err != nil {
+	if _, err := repository.Create(context.Background(), newTestPost(t, userID, categoryID, "duplicate-slug"), nil); err != nil {
 		t.Fatalf("multiple deleted posts may retain the same slug: %v", err)
 	}
 }
@@ -177,7 +177,7 @@ func TestPostRepositoryMySQLConcurrentCreatesOnlyAllowOneActiveSlug(t *testing.T
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
-			_, err := repository.Create(newTestPost(t, userID, categoryID, "concurrent-slug"), nil)
+			_, err := repository.Create(context.Background(), newTestPost(t, userID, categoryID, "concurrent-slug"), nil)
 			errorsFound <- err
 		}()
 	}
@@ -221,7 +221,7 @@ func TestPostRepositoryMySQLPublishIfDueOnlyOneConcurrentCallerWins(t *testing.T
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
-			won, err := repository.PublishIfDue(model.ID, time.Now())
+			won, err := repository.PublishIfDue(context.Background(), model.ID, time.Now())
 			if err != nil {
 				failures <- err
 				return
@@ -271,7 +271,7 @@ func TestPostRepositoryMySQLPublishIfDueSkipsPostsThatAreNotDue(t *testing.T) {
 		if err := db.Create(&posts[i]).Error; err != nil {
 			t.Fatalf("create post %q: %v", posts[i].Title, err)
 		}
-		won, err := repository.PublishIfDue(posts[i].ID, time.Now())
+		won, err := repository.PublishIfDue(context.Background(), posts[i].ID, time.Now())
 		if err != nil || won {
 			t.Fatalf("PublishIfDue(%q) = %v, %v; want false, nil", posts[i].Title, won, err)
 		}

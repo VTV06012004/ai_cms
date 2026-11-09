@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"api/internal/domain"
+	"context"
 	"sync"
 	"testing"
 	"time"
@@ -16,11 +17,11 @@ type dueRepository struct {
 	scheduled map[uint]bool
 }
 
-func (r *dueRepository) ListDue(time.Time, int) ([]domain.Post, error) {
+func (r *dueRepository) ListDue(context.Context, time.Time, int) ([]domain.Post, error) {
 	return r.due, nil
 }
 
-func (r *dueRepository) PublishIfDue(id uint, _ time.Time) (bool, error) {
+func (r *dueRepository) PublishIfDue(_ context.Context, id uint, _ time.Time) (bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if !r.scheduled[id] {
@@ -36,7 +37,7 @@ type recordingAuditRepository struct {
 	actions []string
 }
 
-func (r *recordingAuditRepository) RecordLog(_ uint, action, _, _, _ string) error {
+func (r *recordingAuditRepository) RecordLog(_ context.Context, _ uint, action, _, _, _ string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.actions = append(r.actions, action)
@@ -60,7 +61,7 @@ func newDueUseCase(scheduled bool) (*PostUseCase, *recordingAuditRepository) {
 func TestPublishDuePostsPublishesAndAuditsOnce(t *testing.T) {
 	useCase, audits := newDueUseCase(true)
 
-	count, err := useCase.PublishDuePosts(time.Now())
+	count, err := useCase.PublishDuePosts(context.Background(), time.Now())
 	if err != nil {
 		t.Fatalf("PublishDuePosts returned error: %v", err)
 	}
@@ -80,7 +81,7 @@ func TestPublishDuePostsConcurrentRunsPublishEachPostOnce(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			count, err := useCase.PublishDuePosts(time.Now())
+			count, err := useCase.PublishDuePosts(context.Background(), time.Now())
 			if err != nil {
 				t.Errorf("PublishDuePosts returned error: %v", err)
 			}
@@ -106,7 +107,7 @@ func TestPublishDuePostsSkipsPostThatInstanceLost(t *testing.T) {
 	// Bài đã bị instance khác đăng (hoặc vừa bị sửa) giữa lúc ListDue và UPDATE.
 	useCase, audits := newDueUseCase(false)
 
-	count, err := useCase.PublishDuePosts(time.Now())
+	count, err := useCase.PublishDuePosts(context.Background(), time.Now())
 	if err != nil {
 		t.Fatalf("PublishDuePosts returned error: %v", err)
 	}

@@ -2,6 +2,7 @@ package persistence
 
 import (
 	"api/internal/domain"
+	"context"
 
 	"gorm.io/gorm"
 )
@@ -14,7 +15,7 @@ func NewUserRepository(db *gorm.DB) domain.UserRepository {
 	return &UserRepository{db: db}
 }
 
-func (r *UserRepository) Create(user *domain.User) (*domain.User, error) {
+func (r *UserRepository) Create(ctx context.Context, user *domain.User) (*domain.User, error) {
 	data := user.Data()
 	var rootAdminKey *uint
 	if data.RootAdmin {
@@ -28,7 +29,7 @@ func (r *UserRepository) Create(user *domain.User) (*domain.User, error) {
 		Role:         string(data.Role),
 		RootAdminKey: rootAdminKey,
 	}
-	if err := r.db.Create(&model).Error; err != nil {
+	if err := r.db.WithContext(ctx).Create(&model).Error; err != nil {
 		if isDuplicateKey(err, "email") {
 			return nil, domain.ErrEmailAlreadyExists
 		}
@@ -38,31 +39,32 @@ func (r *UserRepository) Create(user *domain.User) (*domain.User, error) {
 	return &created, nil
 }
 
-func (r *UserRepository) GetByEmail(email string) (*domain.User, error) {
+func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
 	var user UserModel
-	err := r.db.Where("email = ?", email).First(&user).Error
+	err := r.db.WithContext(ctx).Where("email = ?", email).First(&user).Error
 	if err != nil {
 		return nil, notFoundOr(err, domain.ErrUserNotFound)
 	}
 	return userModelToDomain(user), nil
 }
 
-func (r *UserRepository) GetByID(id uint) (*domain.User, error) {
+func (r *UserRepository) GetByID(ctx context.Context, id uint) (*domain.User, error) {
 	var user UserModel
-	err := r.db.First(&user, id).Error
+	err := r.db.WithContext(ctx).First(&user, id).Error
 	if err != nil {
 		return nil, notFoundOr(err, domain.ErrUserNotFound)
 	}
 	return userModelToDomain(user), nil
 }
 
-func (r *UserRepository) GetAll(page domain.PageRequest) ([]domain.User, int64, error) {
+func (r *UserRepository) GetAll(ctx context.Context, page domain.PageRequest) ([]domain.User, int64, error) {
 	var total int64
-	if err := r.db.Model(&UserModel{}).Count(&total).Error; err != nil {
+	db := r.db.WithContext(ctx)
+	if err := db.Model(&UserModel{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	var users []UserModel
-	err := r.db.Select("id", "name", "email", "role", "created_at").
+	err := db.Select("id", "name", "email", "role", "created_at").
 		Order("id ASC").
 		Limit(page.PerPage).Offset(page.Offset()).
 		Find(&users).Error
@@ -76,20 +78,21 @@ func (r *UserRepository) GetAll(page domain.PageRequest) ([]domain.User, int64, 
 	return result, total, nil
 }
 
-func (r *UserRepository) CountByRole(role domain.UserRole) (int64, error) {
+func (r *UserRepository) CountByRole(ctx context.Context, role domain.UserRole) (int64, error) {
 	var count int64
-	err := r.db.Model(&UserModel{}).Where("role = ?", role).Count(&count).Error
+	err := r.db.WithContext(ctx).Model(&UserModel{}).Where("role = ?", role).Count(&count).Error
 	return count, err
 }
 
-func (r *UserRepository) UpdateRole(userID uint, newRole string) error {
-	result := r.db.Model(&UserModel{}).Where("id = ?", userID).Update("role", newRole)
+func (r *UserRepository) UpdateRole(ctx context.Context, userID uint, newRole string) error {
+	db := r.db.WithContext(ctx)
+	result := db.Model(&UserModel{}).Where("id = ?", userID).Update("role", newRole)
 	if result.Error != nil {
 		return result.Error
 	}
 	if result.RowsAffected == 0 {
 		var users int64
-		if err := r.db.Model(&UserModel{}).Where("id = ?", userID).Count(&users).Error; err != nil {
+		if err := db.Model(&UserModel{}).Where("id = ?", userID).Count(&users).Error; err != nil {
 			return err
 		}
 		if users == 0 {

@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -11,9 +12,9 @@ import (
 )
 
 type revisionUseCase interface {
-	GetByPostID(postID, userID uint, userRole string) ([]domain.Revision, error)
-	RestoreRevision(revisionID, userID uint, userRole, ipAddress string) (*domain.Post, error)
-	CompareRevisions(fromID, toID, userID uint, userRole string) (*domain.RevisionComparison, error)
+	GetByPostID(context.Context, uint, uint, string) ([]domain.Revision, error)
+	RestoreRevision(context.Context, uint, uint, string, string) (*domain.Post, error)
+	CompareRevisions(context.Context, uint, uint, uint, string) (*domain.RevisionComparison, error)
 }
 
 type RevisionHandler struct {
@@ -44,7 +45,7 @@ func (h *RevisionHandler) GetByPostID(c *gin.Context) {
 		return
 	}
 
-	revisions, err := h.useCase.GetByPostID(uint(postID), userID, userRole)
+	revisions, err := h.useCase.GetByPostID(c.Request.Context(), uint(postID), userID, userRole)
 	if err != nil {
 		switch {
 		case errors.Is(err, domain.ErrPostNotFound):
@@ -75,7 +76,7 @@ func (h *RevisionHandler) Restore(c *gin.Context) {
 	roleValue, _ := c.Get("user_role")
 	role, _ := roleValue.(string)
 
-	post, err := h.useCase.RestoreRevision(uint(id), userID, role, c.ClientIP())
+	post, err := h.useCase.RestoreRevision(c.Request.Context(), uint(id), userID, role, c.ClientIP())
 	if err != nil {
 		writeError(c, err)
 		return
@@ -103,7 +104,7 @@ func (h *RevisionHandler) Compare(c *gin.Context) {
 	roleValue, _ := c.Get("user_role")
 	role, _ := roleValue.(string)
 
-	comparison, err := h.useCase.CompareRevisions(uint(fromID), uint(toID), userID, role)
+	comparison, err := h.useCase.CompareRevisions(c.Request.Context(), uint(fromID), uint(toID), userID, role)
 	if err != nil {
 		writeError(c, err)
 		return

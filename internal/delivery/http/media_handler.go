@@ -60,7 +60,7 @@ func (h *MediaHandler) UploadImage(c *gin.Context) {
 		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": usecase.ErrImageTooLarge.Error()})
 		return
 	}
-	filename, err := h.useCase.UploadImage(file.Filename, content)
+	filename, err := h.useCase.UploadImage(c.Request.Context(), file.Filename, content)
 	if err != nil {
 		if errors.Is(err, usecase.ErrInvalidImage) {
 			c.JSON(http.StatusUnsupportedMediaType, gin.H{"error": usecase.ErrInvalidImage.Error()})
@@ -98,7 +98,7 @@ type mediaResponse struct {
 }
 
 func (h *MediaHandler) List(c *gin.Context) {
-	files, info, err := h.useCase.ListImages(parsePage(c))
+	files, info, err := h.useCase.ListImages(c.Request.Context(), parsePage(c))
 	if err != nil {
 		writeError(c, err)
 		return
@@ -114,7 +114,7 @@ func (h *MediaHandler) List(c *gin.Context) {
 }
 
 func (h *MediaHandler) Delete(c *gin.Context) {
-	if err := h.useCase.DeleteImage(c.Param("name")); err != nil {
+	if err := h.useCase.DeleteImage(c.Request.Context(), c.Param("name")); err != nil {
 		writeError(c, err)
 		return
 	}

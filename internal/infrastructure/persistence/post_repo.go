@@ -2,6 +2,7 @@ package persistence
 
 import (
 	"api/internal/domain"
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -19,8 +20,8 @@ func NewPostRepository(db *gorm.DB) domain.PostRepository {
 	return &PostRepository{db: db}
 }
 
-func (r *PostRepository) GetAll(criteria domain.PostListCriteria, page domain.PageRequest) ([]domain.Post, int64, error) {
-	filtered := r.db.Model(&PostModel{})
+func (r *PostRepository) GetAll(ctx context.Context, criteria domain.PostListCriteria, page domain.PageRequest) ([]domain.Post, int64, error) {
+	filtered := r.db.WithContext(ctx).Model(&PostModel{})
 	if criteria.AuthorID > 0 {
 		if criteria.IncludePublished {
 			filtered = filtered.Where("author_id = ? OR status = ?", criteria.AuthorID, domain.PostStatusPublished)
@@ -53,18 +54,18 @@ func (r *PostRepository) GetAll(criteria domain.PostListCriteria, page domain.Pa
 	return result, total, nil
 }
 
-func (r *PostRepository) GetByID(id uint) (*domain.Post, error) {
+func (r *PostRepository) GetByID(ctx context.Context, id uint) (*domain.Post, error) {
 	var post PostModel
-	if err := r.db.Preload("Author").Preload("Category").Preload("Tags").First(&post, id).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("Author").Preload("Category").Preload("Tags").First(&post, id).Error; err != nil {
 		return nil, notFoundOr(err, domain.ErrPostNotFound)
 	}
 	result := post.ToDomain()
 	return &result, nil
 }
 
-func (r *PostRepository) Create(post *domain.Post, tagIDs []uint) (*domain.Post, error) {
+func (r *PostRepository) Create(ctx context.Context, post *domain.Post, tagIDs []uint) (*domain.Post, error) {
 	var result *domain.Post
-	err := r.db.Transaction(func(tx *gorm.DB) error {
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		model := postModelFromDomain(post)
 		if err := tx.Create(&model).Error; err != nil {
 			return translatePostWriteError(err)
@@ -79,9 +80,9 @@ func (r *PostRepository) Create(post *domain.Post, tagIDs []uint) (*domain.Post,
 	return result, err
 }
 
-func (r *PostRepository) Update(post *domain.Post, tagIDs []uint) (*domain.Post, error) {
+func (r *PostRepository) Update(ctx context.Context, post *domain.Post, tagIDs []uint) (*domain.Post, error) {
 	var result *domain.Post
-	err := r.db.Transaction(func(tx *gorm.DB) error {
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		model := postModelFromDomain(post)
 		if err := tx.Save(&model).Error; err != nil {
 			return translatePostWriteError(err)
@@ -96,8 +97,8 @@ func (r *PostRepository) Update(post *domain.Post, tagIDs []uint) (*domain.Post,
 	return result, err
 }
 
-func (r *PostRepository) Delete(id uint) error {
-	return r.db.Delete(&PostModel{}, id).Error
+func (r *PostRepository) Delete(ctx context.Context, id uint) error {
+	return r.db.WithContext(ctx).Delete(&PostModel{}, id).Error
 }
 
 var _ domain.PostRepository = (*PostRepository)(nil)
@@ -122,9 +123,9 @@ func replacePostTags(tx *gorm.DB, post *PostModel, tagIDs []uint) error {
 	return tx.Model(post).Association("Tags").Replace(tags)
 }
 
-func (r *PostRepository) ListDue(now time.Time, limit int) ([]domain.Post, error) {
+func (r *PostRepository) ListDue(ctx context.Context, now time.Time, limit int) ([]domain.Post, error) {
 	var models []PostModel
-	err := r.db.Where("status = ? AND scheduled_at IS NOT NULL AND scheduled_at <= ?", domain.PostStatusScheduled, now).
+	err := r.db.WithContext(ctx).Where("status = ? AND scheduled_at IS NOT NULL AND scheduled_at <= ?", domain.PostStatusScheduled, now).
 		Preload("Tags").
 		Order("scheduled_at ASC, id ASC").
 		Limit(limit).
@@ -145,8 +146,8 @@ func (r *PostRepository) ListDue(now time.Time, limit int) ([]domain.Post, error
 //
 // published_at = scheduled_at phải đứng trước scheduled_at = NULL: MySQL đánh giá các phép
 // gán của UPDATE một bảng từ trái sang phải. Quy tắc này trùng với Post.PublishScheduled.
-func (r *PostRepository) PublishIfDue(id uint, now time.Time) (bool, error) {
-	result := r.db.Exec(
+func (r *PostRepository) PublishIfDue(ctx context.Context, id uint, now time.Time) (bool, error) {
+	result := r.db.WithContext(ctx).Exec(
 		"UPDATE posts SET status = ?, published_at = scheduled_at, scheduled_at = NULL, updated_at = ? "+
 			"WHERE id = ? AND status = ? AND scheduled_at IS NOT NULL AND scheduled_at <= ? AND deleted_at IS NULL",
 		domain.PostStatusPublished, now, id, domain.PostStatusScheduled, now,
