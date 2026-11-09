@@ -89,6 +89,16 @@ docker compose run --rm migrate ./migrate -baseline 1
   post without sending `scheduled_at` keeps the existing schedule; a new schedule must
   be in the future.
 
+## Authentication limits
+
+- Passwords are hashed with Argon2id; legacy PBKDF2 hashes are upgraded after a successful login.
+- `/api/auth/*` allows 5 requests per minute per IP and per email. The counters live in the memory of
+  one API process, so they reset on restart and are not shared between several instances.
+  Failed and successful attempts both count, and anyone can lock an email out for a minute by
+  sending 5 wrong attempts for it.
+- The limiter uses `c.ClientIP()`. Behind a reverse proxy, configure Gin trusted proxies so the
+  real client address is used.
+
 ## Configuration notes
 
 ## API documentation
