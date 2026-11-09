@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"unicode/utf8"
 
@@ -137,6 +138,17 @@ func (uc *UserUseCase) EnsureInitialAdmin(ctx context.Context, config InitialAdm
 // MinPasswordLength là độ dài tối thiểu (tính theo ký tự) của mật khẩu.
 const MinPasswordLength = 6
 
+func (uc *UserUseCase) upgradePasswordHash(ctx context.Context, userID uint, password string) error {
+	upgradedHash, err := uc.credentials.HashPassword(password)
+	if err != nil {
+		return fmt.Errorf("không thể tạo hash mới: %w", err)
+	}
+	if err := uc.userRepo.UpdatePasswordHash(ctx, userID, upgradedHash); err != nil {
+		return fmt.Errorf("không thể lưu hash mới: %w", err)
+	}
+	return nil
+}
+
 func (uc *UserUseCase) Login(ctx context.Context, input LoginDTO, ipAddress string) (*LoginResponse, error) {
 	user, err := uc.userRepo.GetByEmail(ctx, input.Email)
 	if err != nil {
@@ -150,12 +162,10 @@ func (uc *UserUseCase) Login(ctx context.Context, input LoginDTO, ipAddress stri
 		return nil, ErrInvalidCredentials
 	}
 	if uc.credentials.PasswordHashNeedsUpgrade(userData.PasswordHash) {
-		upgradedHash, err := uc.credentials.HashPassword(input.Password)
-		if err != nil {
-			return nil, fmt.Errorf("không thể nâng cấp mã hóa mật khẩu: %w", err)
-		}
-		if err := uc.userRepo.UpdatePasswordHash(ctx, userData.ID, upgradedHash); err != nil {
-			return nil, fmt.Errorf("không thể lưu mã hóa mật khẩu mới: %w", err)
+		// Mật khẩu đã đúng nên lỗi nâng cấp hash không được chặn đăng nhập;
+		// hash cũ vẫn dùng được và sẽ được nâng cấp ở lần đăng nhập sau.
+		if err := uc.upgradePasswordHash(ctx, userData.ID, input.Password); err != nil {
+			log.Printf("không thể nâng cấp mã hóa mật khẩu của user #%d: %v", userData.ID, err)
 		}
 	}
 	token, err := uc.credentials.GenerateToken(userData.ID, string(userData.Email), string(userData.Role))

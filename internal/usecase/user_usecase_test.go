@@ -12,6 +12,7 @@ type userRepositoryStub struct {
 	users     map[uint]*domain.User
 	nextID    uint
 	lookupErr error
+	updateErr error
 }
 
 func newUserRepositoryStub() *userRepositoryStub {
@@ -79,6 +80,9 @@ func (r *userRepositoryStub) UpdateRole(_ context.Context, userID uint, newRole 
 }
 
 func (r *userRepositoryStub) UpdatePasswordHash(_ context.Context, userID uint, passwordHash string) error {
+	if r.updateErr != nil {
+		return r.updateErr
+	}
 	user, ok := r.users[userID]
 	if !ok {
 		return domain.ErrUserNotFound
@@ -406,5 +410,30 @@ func TestRegisterRejectsShortPasswordBeforeHashing(t *testing.T) {
 	}
 	if credentials.hashCalls != 0 {
 		t.Fatalf("HashPassword called %d times for a short password", credentials.hashCalls)
+	}
+}
+
+func TestLoginSucceedsWhenPasswordHashUpgradeFails(t *testing.T) {
+	users := newUserRepositoryStub()
+	legacyUser, err := domain.NewUser("Test User", "user@example.com", "pbkdf2:secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := users.Create(context.Background(), legacyUser)
+	if err != nil {
+		t.Fatal(err)
+	}
+	users.updateErr = errors.New("db unavailable")
+	useCase := NewUserUseCase(users, legacyCredentialServiceStub{}, unitOfWorkStub{
+		users: users, audits: &auditRepositoryStub{},
+	})
+
+	if _, err := useCase.Login(context.Background(), LoginDTO{
+		Email: "user@example.com", Password: "secret",
+	}, "127.0.0.1"); err != nil {
+		t.Fatalf("Login failed because of the hash upgrade: %v", err)
+	}
+	if got := users.users[created.Data().ID].Data().PasswordHash; got != "pbkdf2:secret" {
+		t.Fatalf("password hash = %q, want legacy hash kept", got)
 	}
 }
