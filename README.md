@@ -123,6 +123,9 @@ without documenting it, so keep the spec in sync.
   hashes are verified and upgraded to Argon2id after a successful login. Login and
   registration allow up to five requests per minute per IP and email; limits are
   held in memory per API process.
+- **HTTP operations.** The API runs Gin in release mode, emits structured request
+  logs with an `X-Request-ID` response header, and applies request read/write/idle
+  timeouts.
 - **First admin.** On a database with no admin account, set `INITIAL_ADMIN_EMAIL`
   and `INITIAL_ADMIN_PASSWORD` in `.env` before starting Compose. The API creates
   this root admin once; later starts do not change its credentials or role. Public
@@ -177,9 +180,9 @@ runs the tests before building the server.
 On Windows without a local Go install, run Go commands through Docker from the
 repository root:
 
-    docker run --rm -v "%cd%":/src -w /src golang:1.21 gofmt -l .
-    docker run --rm -v "%cd%":/src -w /src golang:1.21 gofmt -w .
-    docker run --rm -v "%cd%":/src -w /src golang:1.21 go test ./...
+    docker run --rm -v "%cd%":/src -w /src golang:1.23 gofmt -l .
+    docker run --rm -v "%cd%":/src -w /src golang:1.23 gofmt -w .
+    docker run --rm -v "%cd%":/src -w /src golang:1.23 go test ./...
 
 `gofmt -l .` lists files that are not formatted (the Docker build fails if there are
 any), and `gofmt -w .` fixes them in place. Run the last two before committing.
