@@ -22,9 +22,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type mediaStorageTestStub struct {
-	calls int
-}
+type mediaStorageTestStub struct{}
 
 func (*mediaStorageTestStub) Save(context.Context, string, []byte) error {
 	return nil

@@ -11,7 +11,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"time"
 
@@ -21,7 +21,8 @@ import (
 
 func main() {
 	if err := run(); err != nil {
-		log.Fatal(err)
+		slog.Error("migration command failed", "error", err)
+		os.Exit(1)
 	}
 }
 
@@ -54,9 +55,13 @@ func run() error {
 		return err
 	}
 	if *baseline > 0 {
-		return migrate.Baseline(ctx, db, migrations, *baseline, log.Printf)
+		return migrate.Baseline(ctx, db, migrations, *baseline, migrationLog)
 	}
-	return migrate.Run(ctx, db, migrations, log.Printf)
+	return migrate.Run(ctx, db, migrations, migrationLog)
+}
+
+func migrationLog(format string, args ...any) {
+	slog.Info(fmt.Sprintf(format, args...))
 }
 
 // waitForDB chờ MySQL nhận kết nối, vì lần đầu khởi tạo volume MySQL mở cổng muộn.

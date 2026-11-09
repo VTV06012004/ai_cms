@@ -2,7 +2,7 @@ package httperrors
 
 import (
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"api/internal/domain"
@@ -98,6 +98,12 @@ func WriteError(c *gin.Context, err error) {
 			return
 		}
 	}
-	log.Printf("internal error on %s %s: %v", c.Request.Method, c.Request.URL.Path, err)
+	requestIDValue, _ := c.Get("request_id")
+	slog.Error("request failed",
+		"request_id", requestIDValue,
+		"method", c.Request.Method,
+		"path", c.Request.URL.Path,
+		"error", err,
+	)
 	c.JSON(http.StatusInternalServerError, gin.H{"error": internalErrorMessage})
 }
