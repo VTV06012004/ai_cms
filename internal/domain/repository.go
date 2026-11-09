@@ -24,6 +24,7 @@ type PostRepository interface {
 	Update(post *Post, tagIDs []uint) (*Post, error)
 	Delete(id uint) error
 	ListDue(now time.Time, limit int) ([]Post, error)
+	PublishIfDue(id uint, now time.Time) (bool, error)
 }
 
 type CategoryRepository interface {

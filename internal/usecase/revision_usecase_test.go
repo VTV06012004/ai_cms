@@ -36,6 +36,10 @@ func (revisionPostRepositoryStub) ListDue(time.Time, int) ([]domain.Post, error)
 	return nil, nil
 }
 
+func (revisionPostRepositoryStub) PublishIfDue(uint, time.Time) (bool, error) {
+	return false, nil
+}
+
 type revisionRepositoryStub struct {
 	revisions []domain.Revision
 	calls     int

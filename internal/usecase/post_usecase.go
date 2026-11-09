@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"api/internal/domain"
-	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -75,9 +74,11 @@ func (uc *PostUseCase) CreatePost(userID uint, userRole string, input CreatePost
 	if err != nil {
 		return nil, err
 	}
-	if err := post.ApplySchedule(input.ScheduledAt, time.Now()); err != nil {
+	now := time.Now()
+	if err := post.ApplySchedule(input.ScheduledAt, now); err != nil {
 		return nil, err
 	}
+	post.SettleStatus(role, now)
 	err = uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
 		created, err := repositories.Posts.Create(post, input.TagIDs)
 		if err != nil {
@@ -112,7 +113,8 @@ func (uc *PostUseCase) UpdatePost(id, userID uint, userRole string, input Create
 			return domain.ErrPostAccessDenied
 		}
 		requestedStatus := domain.PostStatus(input.Status)
-		if requestedStatus != "" {
+		// Chỉ kiểm quyền khi trạng thái thực sự thay đổi; form sửa bài luôn gửi lại trạng thái hiện tại.
+		if requestedStatus != "" && requestedStatus != post.Data().Status {
 			if err := role.EnsureCanSetPostStatus(requestedStatus); err != nil {
 				return err
 			}
@@ -122,9 +124,11 @@ func (uc *PostUseCase) UpdatePost(id, userID uint, userRole string, input Create
 		if err := post.Update(input.Title, input.Slug, input.Content, domain.PostStatus(input.Status), input.CategoryID); err != nil {
 			return err
 		}
-		if err := post.ApplySchedule(input.ScheduledAt, time.Now()); err != nil {
+		now := time.Now()
+		if err := post.ApplySchedule(input.ScheduledAt, now); err != nil {
 			return err
 		}
+		post.SettleStatus(role, now)
 		if err := repositories.Revisions.Create(previous); err != nil {
 			return fmt.Errorf("không thể lưu revision trước khi cập nhật: %w", err)
 		}
@@ -204,7 +208,11 @@ func tagIDs(tags []domain.Tag) []uint {
 	return ids
 }
 
-// PublishDuePosts đăng các bài hẹn giờ đã đến hạn; trả về số bài đã đăng.
+// PublishDuePosts đăng các bài hẹn giờ đã đến hạn; trả về số bài do chính lần gọi này đăng.
+//
+// Danh sách ListDue chỉ là danh sách ứng viên: có thể hai instance cùng thấy một bài. Người
+// thắng được quyết định bởi PublishIfDue (một UPDATE có điều kiện); chỉ khi nó trả về true
+// mới ghi audit, nên bài không bao giờ bị đăng hay ghi log hai lần.
 func (uc *PostUseCase) PublishDuePosts(now time.Time) (int, error) {
 	due, err := uc.postRepo.ListDue(now, 100)
 	if err != nil {
@@ -212,31 +220,25 @@ func (uc *PostUseCase) PublishDuePosts(now time.Time) (int, error) {
 	}
 	published := 0
 	for _, candidate := range due {
-		id := candidate.Data().ID
+		data := candidate.Data()
+		won := false
 		err := uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
-			// Đọc lại trong transaction để tránh đăng trùng/đăng sai khi bài vừa bị sửa.
-			post, err := repositories.Posts.GetByID(id)
-			if err != nil {
+			ok, err := repositories.Posts.PublishIfDue(data.ID, now)
+			if err != nil || !ok {
 				return err
 			}
-			if err := post.PublishScheduled(now); err != nil {
-				return err
-			}
-			data := post.Data()
-			if _, err := repositories.Posts.Update(post, tagIDs(data.Tags)); err != nil {
-				return err
-			}
+			won = true
 			return repositories.Audits.RecordLog(data.AuthorID, "AUTO_PUBLISH_POST",
-				fmt.Sprintf("Bài viết ID: %d", id),
+				fmt.Sprintf("Bài viết ID: %d", data.ID),
 				fmt.Sprintf("Tự động đăng bài hẹn giờ: '%s'", data.Title), "system")
 		})
 		if err != nil {
-			if !errors.Is(err, domain.ErrPostNotDue) {
-				log.Printf("không thể tự động đăng bài %d: %v", id, err)
-			}
+			log.Printf("không thể tự động đăng bài %d: %v", data.ID, err)
 			continue
 		}
-		published++
+		if won {
+			published++
+		}
 	}
 	return published, nil
 }
