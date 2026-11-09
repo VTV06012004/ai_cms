@@ -71,7 +71,7 @@ func run() error {
 	auditRepo := persistence.NewAuditRepository(db)
 	unitOfWork := persistence.NewUnitOfWork(db)
 	userUC := usecase.NewUserUseCase(userRepo, credentials, unitOfWork)
-	if err := userUC.EnsureInitialAdmin(usecase.InitialAdminConfig{
+	if err := userUC.EnsureInitialAdmin(context.Background(), usecase.InitialAdminConfig{
 		Name:     cfg.InitialAdmin.Name,
 		Email:    cfg.InitialAdmin.Email,
 		Password: cfg.InitialAdmin.Password,
@@ -147,7 +147,7 @@ func run() error {
 // runScheduler quét bài hẹn giờ mỗi phút cho đến khi ctx bị hủy.
 func runScheduler(ctx context.Context, posts *usecase.PostUseCase) {
 	tick := func() {
-		count, err := posts.PublishDuePosts(time.Now())
+		count, err := posts.PublishDuePosts(ctx, time.Now())
 		if err != nil {
 			log.Printf("quét bài hẹn giờ lỗi: %v", err)
 			return

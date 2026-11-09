@@ -18,7 +18,7 @@ func NewUserHandler(uc *usecase.UserUseCase) *UserHandler {
 }
 
 func (h *UserHandler) GetAllUsers(c *gin.Context) {
-	users, info, err := h.useCase.GetAllUsers(parsePage(c))
+	users, info, err := h.useCase.GetAllUsers(c.Request.Context(), parsePage(c))
 	if err != nil {
 		writeError(c, err)
 		return
@@ -48,7 +48,7 @@ func (h *UserHandler) UpdateRole(c *gin.Context) {
 	userIDValue, _ := c.Get("user_id")
 	currentUserID, _ := userIDValue.(uint)
 
-	if err := h.useCase.UpdateUserRole(currentUserID, uint(id), input.Role, c.ClientIP()); err != nil {
+	if err := h.useCase.UpdateUserRole(c.Request.Context(), currentUserID, uint(id), input.Role, c.ClientIP()); err != nil {
 		writeError(c, err)
 		return
 	}

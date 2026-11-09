@@ -2,6 +2,7 @@ package http
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"image"
 	"image/color"
@@ -25,13 +26,13 @@ type mediaStorageTestStub struct {
 	calls int
 }
 
-func (*mediaStorageTestStub) Save(string, []byte) error {
+func (*mediaStorageTestStub) Save(context.Context, string, []byte) error {
 	return nil
 }
 
-func (*mediaStorageTestStub) List() ([]domain.MediaFile, error) { return nil, nil }
+func (*mediaStorageTestStub) List(context.Context) ([]domain.MediaFile, error) { return nil, nil }
 
-func (*mediaStorageTestStub) Delete(string) error { return nil }
+func (*mediaStorageTestStub) Delete(context.Context, string) error { return nil }
 
 func newMultipartUploadRequest(t *testing.T, filename string, content []byte) *http.Request {
 	t.Helper()
@@ -133,7 +134,7 @@ func TestServeUploadedFileSetsActiveContentProtectionHeaders(t *testing.T) {
 
 type mediaListStorageStub struct{ mediaStorageTestStub }
 
-func (*mediaListStorageStub) List() ([]domain.MediaFile, error) {
+func (*mediaListStorageStub) List(context.Context) ([]domain.MediaFile, error) {
 	return []domain.MediaFile{{Name: "a.png", Size: 1, ModifiedAt: time.Now()}}, nil
 }
 
