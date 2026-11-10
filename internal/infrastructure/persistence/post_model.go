@@ -13,7 +13,6 @@ type PostModel struct {
 	Title           string    `gorm:"not null"`
 	Slug            string    `gorm:"size:255;not null"`
 	Content         string    `gorm:"type:longtext"`
-	Excerpt         string    `gorm:"type:text"`
 	Status          string    `gorm:"type:enum('draft','review','rejected','published','scheduled');default:'draft'"`
 	RejectionReason string    `gorm:"type:text"`
 	AuthorID        uint      `gorm:"index"`
@@ -22,9 +21,7 @@ type PostModel struct {
 	Moderator       *UserModel    `gorm:"foreignKey:ModeratorID"`
 	CategoryID      uint          `gorm:"index"`
 	Category        CategoryModel `gorm:"foreignKey:CategoryID"`
-	SEOTitle        string
-	SEODescription  string
-	ScheduledAt     *time.Time `gorm:"index"`
+	ScheduledAt     *time.Time    `gorm:"index"`
 	PublishedAt     *time.Time
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
@@ -42,14 +39,11 @@ func (m PostModel) ToDomain() domain.Post {
 		Title:           m.Title,
 		Slug:            m.Slug,
 		Content:         m.Content,
-		Excerpt:         m.Excerpt,
 		Status:          domain.PostStatus(m.Status),
 		RejectionReason: m.RejectionReason,
 		AuthorID:        m.AuthorID,
 		ModeratorID:     m.ModeratorID,
 		CategoryID:      m.CategoryID,
-		SEOTitle:        m.SEOTitle,
-		SEODescription:  m.SEODescription,
 		PublishedAt:     m.PublishedAt,
 		ScheduledAt:     m.ScheduledAt,
 		CreatedAt:       m.CreatedAt,
@@ -79,14 +73,11 @@ func postModelFromDomain(post *domain.Post) PostModel {
 		Title:           data.Title,
 		Slug:            data.Slug,
 		Content:         data.Content,
-		Excerpt:         data.Excerpt,
 		Status:          string(data.Status),
 		RejectionReason: data.RejectionReason,
 		AuthorID:        data.AuthorID,
 		ModeratorID:     data.ModeratorID,
 		CategoryID:      data.CategoryID,
-		SEOTitle:        data.SEOTitle,
-		SEODescription:  data.SEODescription,
 		PublishedAt:     data.PublishedAt,
 		ScheduledAt:     data.ScheduledAt,
 		CreatedAt:       data.CreatedAt,

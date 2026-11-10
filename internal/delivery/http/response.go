@@ -36,7 +36,6 @@ type postResponse struct {
 	Title           string            `json:"title"`
 	Slug            string            `json:"slug"`
 	Content         string            `json:"content"`
-	Excerpt         string            `json:"excerpt"`
 	Status          string            `json:"status"`
 	RejectionReason string            `json:"rejection_reason"`
 	AuthorID        uint              `json:"author_id"`
@@ -45,8 +44,6 @@ type postResponse struct {
 	Moderator       *userResponse     `json:"moderator,omitempty"`
 	CategoryID      uint              `json:"category_id"`
 	Category        *categoryResponse `json:"category,omitempty"`
-	SEOTitle        string            `json:"seo_title"`
-	SEODescription  string            `json:"seo_description"`
 	PublishedAt     *time.Time        `json:"published_at"`
 	ScheduledAt     *time.Time        `json:"scheduled_at"`
 	CreatedAt       time.Time         `json:"created_at"`
@@ -135,11 +132,10 @@ func toPostResponse(post domain.Post) postResponse {
 	data := post.Data()
 	response := postResponse{
 		ID: data.ID, Title: data.Title, Slug: data.Slug, Content: data.Content,
-		Excerpt: data.Excerpt, Status: string(data.Status), RejectionReason: data.RejectionReason,
+		Status: string(data.Status), RejectionReason: data.RejectionReason,
 		AuthorID: data.AuthorID, Author: toUserResponsePtr(data.Author),
 		ModeratorID: data.ModeratorID, Moderator: toUserResponsePtr(data.Moderator),
-		CategoryID: data.CategoryID, SEOTitle: data.SEOTitle,
-		SEODescription: data.SEODescription, PublishedAt: data.PublishedAt,
+		CategoryID: data.CategoryID, PublishedAt: data.PublishedAt,
 		CreatedAt: data.CreatedAt, UpdatedAt: data.UpdatedAt,
 		ScheduledAt: data.ScheduledAt,
 	}
