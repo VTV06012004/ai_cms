@@ -187,6 +187,22 @@ repository root:
 `gofmt -l .` lists files that are not formatted (the Docker build fails if there are
 any), and `gofmt -w .` fixes them in place. Run the last two before committing.
 
+### Frontend tests
+
+The frontend (`web/`) uses Vitest and Testing Library. Run from `web/`:
+
+    npm ci
+    npm run typecheck
+    npm test
+
+On Windows without a local Node install, run them through Docker from the repository root:
+
+    docker run --rm -v "%cd%\web":/app -w /app node:22-alpine sh -c "npm ci && npm run typecheck && npm test"
+
+All pages call the shared `apiClient` from `web/lib/api.ts`. It attaches the stored
+token and signs the user out on a 401, so pages must not set the `Authorization`
+header themselves.
+
 Post slug uniqueness integration tests require a disposable MySQL 8.4 instance
 and `MYSQL_TEST_DSN` with permission to create and drop databases. The tests
 create isolated temporary databases and remove them when finished. Do not point
