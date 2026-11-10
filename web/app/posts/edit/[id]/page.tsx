@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { isAxiosError } from 'axios';
 import { apiClient, apiUrl, mediaUrl } from '@/lib/api';
+import { draftKey as buildDraftKey, type PostDraft } from '@/lib/draft';
 import { removeMarkdownImage } from '@/lib/markdown';
+import { useDraftAutosave } from '@/lib/useDraftAutosave';
 import MediaPicker from '@/app/components/MediaPicker';
 
 interface Category {
@@ -67,9 +69,32 @@ function EditPostForm() {
   const [comparing, setComparing] = useState(false);
 
   const [loading, setLoading] = useState(true);
+  const [draftKey, setDraftKey] = useState<string | null>(null);
   const router = useRouter();
   const params = useParams();
   const { id } = params;
+
+  const form = useMemo<PostDraft>(
+    () => ({ title, slug, content, status, scheduledAt, categoryId, selectedTags }),
+    [title, slug, content, status, scheduledAt, categoryId, selectedTags],
+  );
+  const applyDraft = useCallback((draft: PostDraft) => {
+    setTitle(draft.title);
+    setSlug(draft.slug);
+    setContent(draft.content);
+    setStatus(draft.status);
+    setScheduledAt(draft.scheduledAt);
+    setCategoryId(draft.categoryId);
+    setSelectedTags(draft.selectedTags);
+    const imageMatch = draft.content.match(/!\[.*?\]\((.*?)\)/);
+    setPreviewImage(imageMatch && imageMatch[1] ? mediaUrl(imageMatch[1]) : '');
+  }, []);
+  const draft = useDraftAutosave({
+    draftKey,
+    form,
+    ready: !loading && draftKey !== null,
+    apply: applyDraft,
+  });
 
   const fetchRevisions = async () => {
     try {
@@ -83,6 +108,7 @@ function EditPostForm() {
   useEffect(() => {
     const role = localStorage.getItem('userRole') || 'author';
     setUserRole(role);
+    setDraftKey(buildDraftKey(localStorage.getItem('userId'), String(id)));
 
     const fetchData = async () => {
       try {
@@ -187,6 +213,7 @@ function EditPostForm() {
         }
       );
 
+      draft.markSaved();
       alert('Cập nhật bài viết thành công!');
       router.push('/posts'); 
     } catch (err: any) {
@@ -275,7 +302,32 @@ function EditPostForm() {
   return (
     <div className="max-w-4xl mx-auto mt-10 p-6 bg-white rounded-lg shadow-md text-black relative">
       <h1 className="text-2xl font-bold mb-6">Chỉnh sửa Bài viết (ID: {id})</h1>
-      
+
+      {draft.pending && (
+        <div className="mb-4 p-3 bg-amber-50 border border-amber-300 rounded-md text-sm text-amber-900">
+          <p>
+            Có bản nháp chưa lưu từ {new Date(draft.pending.savedAt).toLocaleString('vi-VN')}.
+            Khôi phục để tiếp tục chỉnh sửa, hoặc bỏ để dùng bản đã lưu trên máy chủ.
+          </p>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={draft.restore}
+              className="px-3 py-1 bg-amber-600 text-white rounded hover:bg-amber-700"
+            >
+              Khôi phục bản nháp
+            </button>
+            <button
+              type="button"
+              onClick={draft.discard}
+              className="px-3 py-1 bg-white border border-amber-400 rounded hover:bg-amber-100"
+            >
+              Bỏ bản nháp
+            </button>
+          </div>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-sm font-medium mb-1">Tiêu đề</label>

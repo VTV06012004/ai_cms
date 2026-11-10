@@ -38,6 +38,8 @@ export function useDraftAutosave({ draftKey, form, ready, apply }: Options) {
     baseline.current = form;
     const stored = loadDraft(draftKey);
     if (stored && !sameDraft(stored.form, form)) {
+      // One-time read of an external store (localStorage) after mount.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPending(stored);
     } else {
       clearDraft(draftKey);

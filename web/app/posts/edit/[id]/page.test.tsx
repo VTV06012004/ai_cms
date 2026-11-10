@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient, apiUrl } from '@/lib/api';
+import { draftKey } from '@/lib/draft';
 import EditPostPage from './page';
 
 const push = vi.fn();
@@ -147,5 +148,72 @@ describe('edit post form', () => {
     for (const call of calls) {
       expect(JSON.stringify(call.slice(1))).not.toMatch(/Authorization/i);
     }
+  });
+});
+
+describe('edit post draft recovery (M6)', () => {
+  const key = draftKey('3', '7');
+  const storedForm = {
+    title: 'Tiêu đề đang gõ dở',
+    slug: 'bai-cu',
+    content: 'Nội dung',
+    status: 'draft',
+    scheduledAt: '',
+    categoryId: 1,
+    selectedTags: [],
+  };
+
+  beforeEach(() => {
+    localStorage.setItem('userId', '3');
+  });
+
+  function storeDraft() {
+    localStorage.setItem(key, JSON.stringify({ savedAt: Date.now(), form: storedForm }));
+  }
+
+  it('offers an unsaved draft and restores it on request', async () => {
+    storeDraft();
+    await openPage('author', basePost);
+
+    expect(await screen.findByText(/Có bản nháp chưa lưu/)).toBeInTheDocument();
+    expect(screen.getByDisplayValue('Bài cũ')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Khôi phục bản nháp' }));
+
+    expect(screen.getByDisplayValue('Tiêu đề đang gõ dở')).toBeInTheDocument();
+    expect(screen.queryByText(/Có bản nháp chưa lưu/)).not.toBeInTheDocument();
+  });
+
+  it('drops the draft when the author discards it', async () => {
+    storeDraft();
+    await openPage('author', basePost);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Bỏ bản nháp' }));
+
+    expect(screen.getByDisplayValue('Bài cũ')).toBeInTheDocument();
+    expect(localStorage.getItem(key)).toBeNull();
+  });
+
+  it('removes the draft after the server accepted the save', async () => {
+    storeDraft();
+    await openPage('author', basePost);
+    await userEvent.click(await screen.findByRole('button', { name: 'Khôi phục bản nháp' }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/posts'));
+    expect(localStorage.getItem(key)).toBeNull();
+  });
+
+  it('keeps the draft when saving fails', async () => {
+    storeDraft();
+    await openPage('author', basePost);
+    await userEvent.click(await screen.findByRole('button', { name: 'Khôi phục bản nháp' }));
+    vi.mocked(apiClient.put).mockRejectedValue({ response: { data: { error: 'lỗi' } } });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
+
+    await waitFor(() => expect(window.alert).toHaveBeenCalledWith('lỗi'));
+    expect(localStorage.getItem(key)).not.toBeNull();
   });
 });

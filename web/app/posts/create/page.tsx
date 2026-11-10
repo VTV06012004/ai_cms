@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { isAxiosError } from 'axios';
 import { apiClient, apiUrl, mediaUrl } from '@/lib/api';
+import { draftKey as buildDraftKey, type PostDraft } from '@/lib/draft';
 import { removeMarkdownImage } from '@/lib/markdown';
+import { useDraftAutosave } from '@/lib/useDraftAutosave';
 import MediaPicker from '@/app/components/MediaPicker';
 
 interface Category {
@@ -38,12 +40,37 @@ export default function CreatePostPage() {
   const [showMediaPicker, setShowMediaPicker] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [draftKey, setDraftKey] = useState<string | null>(null);
+  const [dataReady, setDataReady] = useState(false);
   const router = useRouter();
+
+  const form = useMemo<PostDraft>(
+    () => ({ title, slug, content, status, scheduledAt, categoryId, selectedTags }),
+    [title, slug, content, status, scheduledAt, categoryId, selectedTags],
+  );
+  const applyDraft = useCallback((draft: PostDraft) => {
+    setTitle(draft.title);
+    setSlug(draft.slug);
+    setContent(draft.content);
+    setStatus(draft.status);
+    setScheduledAt(draft.scheduledAt);
+    setCategoryId(draft.categoryId);
+    setSelectedTags(draft.selectedTags);
+    const imageMatch = draft.content.match(/!\[.*?\]\((.*?)\)/);
+    setPreviewImage(imageMatch && imageMatch[1] ? imageMatch[1] : '');
+  }, []);
+  const draft = useDraftAutosave({
+    draftKey,
+    form,
+    ready: dataReady && draftKey !== null,
+    apply: applyDraft,
+  });
 
   // Gọi API lấy danh mục, tags và kiểm tra vai trò user khi load trang
   useEffect(() => {
     const role = localStorage.getItem('userRole') || 'author';
     setUserRole(role);
+    setDraftKey(buildDraftKey(localStorage.getItem('userId'), 'new'));
 
     const fetchData = async () => {
       try {
@@ -62,6 +89,8 @@ export default function CreatePostPage() {
 
       } catch (err) {
         console.error('Không thể tải dữ liệu danh mục hoặc thẻ:', err);
+      } finally {
+        setDataReady(true);
       }
     };
 
@@ -147,6 +176,7 @@ export default function CreatePostPage() {
         }
       );
 
+      draft.markSaved();
       router.push('/posts');
     } catch (err: any) {
       console.error(err);
@@ -163,6 +193,31 @@ export default function CreatePostPage() {
       {error && (
         <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md text-sm">
           {error}
+        </div>
+      )}
+
+      {draft.pending && (
+        <div className="mb-4 p-3 bg-amber-50 border border-amber-300 rounded-md text-sm text-amber-900">
+          <p>
+            Có bản nháp chưa lưu từ {new Date(draft.pending.savedAt).toLocaleString('vi-VN')}.
+            Khôi phục để tiếp tục viết, hoặc bỏ để bắt đầu bài mới.
+          </p>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={draft.restore}
+              className="px-3 py-1 bg-amber-600 text-white rounded hover:bg-amber-700"
+            >
+              Khôi phục bản nháp
+            </button>
+            <button
+              type="button"
+              onClick={draft.discard}
+              className="px-3 py-1 bg-white border border-amber-400 rounded hover:bg-amber-100"
+            >
+              Bỏ bản nháp
+            </button>
+          </div>
         </div>
       )}
 
