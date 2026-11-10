@@ -2,7 +2,6 @@ package http
 
 import (
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -25,7 +24,7 @@ func (h *PostHandler) GetAll(c *gin.Context) {
 	userIDValue, _ := c.Get("user_id")
 	userID, _ := userIDValue.(uint)
 
-	posts, info, err := h.useCase.GetAllPosts(userRole, userID, parsePage(c))
+	posts, info, err := h.useCase.GetAllPosts(c.Request.Context(), userRole, userID, parsePage(c))
 	if err != nil {
 		writeError(c, err)
 		return
@@ -34,9 +33,8 @@ func (h *PostHandler) GetAll(c *gin.Context) {
 }
 
 func (h *PostHandler) GetByID(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID không hợp lệ"})
+	id, ok := parseIDParam(c, "id")
+	if !ok {
 		return
 	}
 
@@ -45,9 +43,9 @@ func (h *PostHandler) GetByID(c *gin.Context) {
 	userIDValue, _ := c.Get("user_id")
 	userID, _ := userIDValue.(uint)
 
-	post, err := h.useCase.GetPostByID(uint(id), userRole, userID)
+	post, err := h.useCase.GetPostByID(c.Request.Context(), id, userRole, userID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy bài viết"})
+		writeError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"data": toPostResponse(*post)})
@@ -71,18 +69,18 @@ func (h *PostHandler) Create(c *gin.Context) {
 	userIDValue, exists := c.Get("user_id")
 	userID, validUserID := userIDValue.(uint)
 	if !exists || !validUserID {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Không tìm thấy thông tin người dùng"})
+		writeError(c, errMissingUserIdentity)
 		return
 	}
 
 	userRoleValue, roleExists := c.Get("user_role")
 	userRole, validRole := userRoleValue.(string)
 	if !roleExists || !validRole {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Không tìm thấy thông tin phân quyền"})
+		writeError(c, errMissingRoleIdentity)
 		return
 	}
 
-	post, err := h.useCase.CreatePost(userID, userRole, usecase.CreatePostDTO{
+	post, err := h.useCase.CreatePost(c.Request.Context(), userID, userRole, usecase.CreatePostDTO{
 		Title: request.Title, Slug: request.Slug, Content: request.Content,
 		Status: request.Status, CategoryID: request.CategoryID, TagIDs: request.TagIDs,
 		ScheduledAt: request.ScheduledAt,
@@ -96,16 +94,15 @@ func (h *PostHandler) Create(c *gin.Context) {
 }
 
 func (h *PostHandler) Update(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID không hợp lệ"})
+	id, ok := parseIDParam(c, "id")
+	if !ok {
 		return
 	}
 
 	userIDValue, exists := c.Get("user_id")
 	userID, _ := userIDValue.(uint)
 	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Không tìm thấy thông tin người dùng"})
+		writeError(c, errMissingUserIdentity)
 		return
 	}
 
@@ -126,7 +123,7 @@ func (h *PostHandler) Update(c *gin.Context) {
 		return
 	}
 
-	updatedPost, err := h.useCase.UpdatePost(uint(id), userID, userRole, usecase.CreatePostDTO{
+	updatedPost, err := h.useCase.UpdatePost(c.Request.Context(), id, userID, userRole, usecase.CreatePostDTO{
 		Title: request.Title, Slug: request.Slug, Content: request.Content,
 		Status: request.Status, CategoryID: request.CategoryID, TagIDs: request.TagIDs,
 		ScheduledAt: request.ScheduledAt,
@@ -140,9 +137,8 @@ func (h *PostHandler) Update(c *gin.Context) {
 }
 
 func (h *PostHandler) Delete(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID không hợp lệ"})
+	id, ok := parseIDParam(c, "id")
+	if !ok {
 		return
 	}
 
@@ -151,7 +147,7 @@ func (h *PostHandler) Delete(c *gin.Context) {
 	userRoleValue, _ := c.Get("user_role")
 	userRole, _ := userRoleValue.(string)
 
-	if err := h.useCase.DeletePost(uint(id), userID, userRole, c.ClientIP()); err != nil {
+	if err := h.useCase.DeletePost(c.Request.Context(), id, userID, userRole, c.ClientIP()); err != nil {
 		writeError(c, err)
 		return
 	}
@@ -160,9 +156,8 @@ func (h *PostHandler) Delete(c *gin.Context) {
 }
 
 func (h *PostHandler) Moderate(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID không hợp lệ"})
+	id, ok := parseIDParam(c, "id")
+	if !ok {
 		return
 	}
 
@@ -178,7 +173,7 @@ func (h *PostHandler) Moderate(c *gin.Context) {
 
 	userIDValue, _ := c.Get("user_id")
 	userID, _ := userIDValue.(uint)
-	post, err := h.useCase.ModeratePost(uint(id), userID, req.Status, req.RejectionReason, c.ClientIP())
+	post, err := h.useCase.ModeratePost(c.Request.Context(), id, userID, req.Status, req.RejectionReason, c.ClientIP())
 	if err != nil {
 		writeError(c, err)
 		return

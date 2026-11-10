@@ -1,10 +1,10 @@
 'use client';
 
-import axios from 'axios';
+import { isAxiosError } from 'axios';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { apiUrl } from '@/lib/api';
+import { apiClient, apiUrl } from '@/lib/api';
 
 export default function RegisterPage() {
   const [name, setName] = useState('');
@@ -20,11 +20,11 @@ export default function RegisterPage() {
     setLoading(true);
 
     try {
-      await axios.post(apiUrl('auth/register'), { name, email, password });
+      await apiClient.post(apiUrl('auth/register'), { name, email, password });
       window.alert('Tài khoản đã được tạo. Vui lòng đăng nhập.');
       router.push('/login');
     } catch (registrationError) {
-      if (axios.isAxiosError(registrationError)) {
+      if (isAxiosError(registrationError)) {
         setError(registrationError.response?.data?.error || 'Không thể tạo tài khoản.');
       } else {
         setError('Đã xảy ra lỗi không xác định khi tạo tài khoản.');

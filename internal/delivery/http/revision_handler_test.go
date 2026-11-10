@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -20,20 +21,24 @@ type revisionUseCaseStub struct {
 	userID    uint
 	userRole  string
 	postID    uint
+	ctx       context.Context
 }
 
-func (s *revisionUseCaseStub) GetByPostID(postID, userID uint, userRole string) ([]domain.Revision, error) {
+type revisionContextKey struct{}
+
+func (s *revisionUseCaseStub) GetByPostID(ctx context.Context, postID, userID uint, userRole string) ([]domain.Revision, error) {
+	s.ctx = ctx
 	s.postID = postID
 	s.userID = userID
 	s.userRole = userRole
 	return s.revisions, s.err
 }
 
-func (*revisionUseCaseStub) RestoreRevision(uint, uint, string, string) (*domain.Post, error) {
+func (*revisionUseCaseStub) RestoreRevision(context.Context, uint, uint, string, string) (*domain.Post, error) {
 	return nil, nil
 }
 
-func (*revisionUseCaseStub) CompareRevisions(uint, uint, uint, string) (*domain.RevisionComparison, error) {
+func (*revisionUseCaseStub) CompareRevisions(context.Context, uint, uint, uint, string) (*domain.RevisionComparison, error) {
 	return nil, nil
 }
 
@@ -51,7 +56,8 @@ func TestRevisionHandlerRequiresIdentityAndPassesAuthorizationContext(t *testing
 	}, NewRevisionHandler(stub).GetByPostID)
 
 	response := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/posts/7/revisions", nil)
+	request := httptest.NewRequest(http.MethodGet, "/posts/7/revisions", nil).
+		WithContext(context.WithValue(context.Background(), revisionContextKey{}, "request-context"))
 	router.ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
@@ -59,6 +65,9 @@ func TestRevisionHandlerRequiresIdentityAndPassesAuthorizationContext(t *testing
 	}
 	if stub.postID != 7 || stub.userID != 17 || stub.userRole != string(domain.UserRoleAuthor) {
 		t.Fatalf("use case received post=%d user=%d role=%q", stub.postID, stub.userID, stub.userRole)
+	}
+	if got := stub.ctx.Value(revisionContextKey{}); got != "request-context" {
+		t.Fatalf("use case context value = %v, want request context", got)
 	}
 	if !strings.Contains(response.Body.String(), "private version") {
 		t.Fatal("authorized post owner did not receive revision data")

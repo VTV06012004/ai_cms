@@ -22,7 +22,7 @@ type tagRequest struct {
 }
 
 func (h *TagHandler) GetAll(c *gin.Context) {
-	tags, err := h.useCase.GetAllTags()
+	tags, err := h.useCase.GetAllTags(c.Request.Context())
 	if err != nil {
 		writeError(c, err)
 		return
@@ -40,7 +40,7 @@ func (h *TagHandler) Create(c *gin.Context) {
 		writeInvalidRequest(c)
 		return
 	}
-	tag, err := h.useCase.CreateTag(currentUserID(c), request.Name, request.Slug, c.ClientIP())
+	tag, err := h.useCase.CreateTag(c.Request.Context(), currentUserID(c), request.Name, request.Slug, c.ClientIP())
 	if err != nil {
 		writeError(c, err)
 		return
@@ -58,7 +58,7 @@ func (h *TagHandler) Update(c *gin.Context) {
 		writeInvalidRequest(c)
 		return
 	}
-	tag, err := h.useCase.UpdateTag(currentUserID(c), id, request.Name, request.Slug, c.ClientIP())
+	tag, err := h.useCase.UpdateTag(c.Request.Context(), currentUserID(c), id, request.Name, request.Slug, c.ClientIP())
 	if err != nil {
 		writeError(c, err)
 		return
@@ -71,7 +71,7 @@ func (h *TagHandler) Delete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := h.useCase.DeleteTag(currentUserID(c), id, c.ClientIP()); err != nil {
+	if err := h.useCase.DeleteTag(c.Request.Context(), currentUserID(c), id, c.ClientIP()); err != nil {
 		writeError(c, err)
 		return
 	}

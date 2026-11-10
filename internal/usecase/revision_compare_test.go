@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -11,11 +12,13 @@ type compareRevisionRepository struct {
 	byID map[uint]*domain.Revision
 }
 
-func (compareRevisionRepository) Create(*domain.Revision) error { return nil }
+func (compareRevisionRepository) Create(context.Context, *domain.Revision) error { return nil }
 
-func (compareRevisionRepository) GetByPostID(uint) ([]domain.Revision, error) { return nil, nil }
+func (compareRevisionRepository) GetByPostID(context.Context, uint) ([]domain.Revision, error) {
+	return nil, nil
+}
 
-func (r compareRevisionRepository) GetByID(id uint) (*domain.Revision, error) {
+func (r compareRevisionRepository) GetByID(_ context.Context, id uint) (*domain.Revision, error) {
 	revision, ok := r.byID[id]
 	if !ok {
 		return nil, domain.ErrRevisionNotFound
@@ -34,7 +37,7 @@ func newCompareUseCase() *RevisionUseCase {
 }
 
 func TestCompareRevisionsWithCurrentPost(t *testing.T) {
-	result, err := newCompareUseCase().CompareRevisions(1, 0, 22, string(domain.UserRoleAuthor))
+	result, err := newCompareUseCase().CompareRevisions(context.Background(), 1, 0, 22, string(domain.UserRoleAuthor))
 	if err != nil {
 		t.Fatalf("CompareRevisions returned error: %v", err)
 	}
@@ -46,13 +49,13 @@ func TestCompareRevisionsWithCurrentPost(t *testing.T) {
 func TestCompareRevisionsRejectsOtherPostsAndOtherAuthors(t *testing.T) {
 	useCase := newCompareUseCase()
 
-	if _, err := useCase.CompareRevisions(1, 3, 22, string(domain.UserRoleAuthor)); !errors.Is(err, domain.ErrRevisionPostMismatch) {
+	if _, err := useCase.CompareRevisions(context.Background(), 1, 3, 22, string(domain.UserRoleAuthor)); !errors.Is(err, domain.ErrRevisionPostMismatch) {
 		t.Fatalf("expected ErrRevisionPostMismatch, got %v", err)
 	}
-	if _, err := useCase.CompareRevisions(1, 2, 99, string(domain.UserRoleAuthor)); !errors.Is(err, domain.ErrPostAccessDenied) {
+	if _, err := useCase.CompareRevisions(context.Background(), 1, 2, 99, string(domain.UserRoleAuthor)); !errors.Is(err, domain.ErrPostAccessDenied) {
 		t.Fatalf("expected ErrPostAccessDenied, got %v", err)
 	}
-	if _, err := useCase.CompareRevisions(1, 404, 22, string(domain.UserRoleAuthor)); !errors.Is(err, domain.ErrRevisionNotFound) {
+	if _, err := useCase.CompareRevisions(context.Background(), 1, 404, 22, string(domain.UserRoleAuthor)); !errors.Is(err, domain.ErrRevisionNotFound) {
 		t.Fatalf("expected ErrRevisionNotFound, got %v", err)
 	}
 }

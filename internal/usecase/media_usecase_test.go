@@ -3,6 +3,7 @@ package usecase
 import (
 	"api/internal/domain"
 	"bytes"
+	"context"
 	"encoding/base64"
 	"errors"
 	"image"
@@ -23,13 +24,13 @@ type mediaStorageStub struct {
 	deleted []string
 }
 
-func (s *mediaStorageStub) List() ([]domain.MediaFile, error) { return s.files, nil }
+func (s *mediaStorageStub) List(context.Context) ([]domain.MediaFile, error) { return s.files, nil }
 
-func (s *mediaStorageStub) Delete(name string) error {
+func (s *mediaStorageStub) Delete(_ context.Context, name string) error {
 	s.deleted = append(s.deleted, name)
 	return nil
 }
-func (s *mediaStorageStub) Save(name string, content []byte) error {
+func (s *mediaStorageStub) Save(_ context.Context, name string, content []byte) error {
 	s.name = name
 	s.content = append([]byte(nil), content...)
 	s.calls++
@@ -66,7 +67,7 @@ func TestUploadImageAcceptsSupportedRasterImageContent(t *testing.T) {
 			storage := &mediaStorageStub{}
 			useCase := NewMediaUseCase(storage)
 
-			name, err := useCase.UploadImage("user-supplied"+extension, content)
+			name, err := useCase.UploadImage(context.Background(), "user-supplied"+extension, content)
 			if err != nil {
 				t.Fatalf("UploadImage rejected valid image: %v", err)
 			}
@@ -96,7 +97,7 @@ func TestUploadImageRejectsNonImagesAndExtensionMismatch(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			storage := &mediaStorageStub{}
-			_, err := NewMediaUseCase(storage).UploadImage(test.filename, test.content)
+			_, err := NewMediaUseCase(storage).UploadImage(context.Background(), test.filename, test.content)
 			if err != ErrInvalidImage {
 				t.Fatalf("error = %v, want ErrInvalidImage", err)
 			}
@@ -111,7 +112,7 @@ func TestUploadImageRejectsFilesOverFiveMegabytes(t *testing.T) {
 	storage := &mediaStorageStub{}
 	content := make([]byte, MaxImageSize+1)
 
-	_, err := NewMediaUseCase(storage).UploadImage("large.png", content)
+	_, err := NewMediaUseCase(storage).UploadImage(context.Background(), "large.png", content)
 	if err != ErrImageTooLarge {
 		t.Fatalf("error = %v, want ErrImageTooLarge", err)
 	}
@@ -130,14 +131,14 @@ func TestListImagesIsNewestFirstPaginatedAndImagesOnly(t *testing.T) {
 	}}
 	useCase := NewMediaUseCase(storage)
 
-	items, info, err := useCase.ListImages(domain.NewPageRequest(1, 2))
+	items, info, err := useCase.ListImages(context.Background(), domain.NewPageRequest(1, 2))
 	if err != nil {
 		t.Fatalf("ListImages returned error: %v", err)
 	}
 	if info.Total != 3 || len(items) != 2 || items[0].Name != "c.webp" || items[1].Name != "b.jpg" {
 		t.Fatalf("unexpected first page: total=%d items=%+v", info.Total, items)
 	}
-	items, _, _ = useCase.ListImages(domain.NewPageRequest(2, 2))
+	items, _, _ = useCase.ListImages(context.Background(), domain.NewPageRequest(2, 2))
 	if len(items) != 1 || items[0].Name != "a.png" {
 		t.Fatalf("unexpected second page: %+v", items)
 	}
@@ -146,7 +147,7 @@ func TestListImagesIsNewestFirstPaginatedAndImagesOnly(t *testing.T) {
 func TestDeleteImageRejectsUnsafeNames(t *testing.T) {
 	for _, name := range []string{"", "../secret.png", "a/b.png", "notes.txt", ".."} {
 		storage := &mediaStorageStub{}
-		err := NewMediaUseCase(storage).DeleteImage(name)
+		err := NewMediaUseCase(storage).DeleteImage(context.Background(), name)
 		if !errors.Is(err, domain.ErrMediaNotFound) {
 			t.Fatalf("DeleteImage(%q) error = %v, want ErrMediaNotFound", name, err)
 		}
@@ -155,7 +156,7 @@ func TestDeleteImageRejectsUnsafeNames(t *testing.T) {
 		}
 	}
 	storage := &mediaStorageStub{}
-	if err := NewMediaUseCase(storage).DeleteImage("1700000000.png"); err != nil || len(storage.deleted) != 1 {
+	if err := NewMediaUseCase(storage).DeleteImage(context.Background(), "1700000000.png"); err != nil || len(storage.deleted) != 1 {
 		t.Fatalf("valid name was not deleted: err=%v deleted=%v", err, storage.deleted)
 	}
 }
