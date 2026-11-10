@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,6 +13,7 @@ import (
 
 	"api/internal/config"
 	delivery "api/internal/delivery/http"
+	"api/internal/delivery/http/middleware"
 	"api/internal/infrastructure/database"
 	"api/internal/infrastructure/persistence"
 	"api/internal/infrastructure/security"
@@ -25,7 +26,8 @@ import (
 
 func main() {
 	if err := run(); err != nil {
-		log.Fatal(err)
+		slog.Error("server stopped", "error", err)
+		os.Exit(1)
 	}
 }
 
@@ -52,9 +54,6 @@ func run() error {
 	}
 	defer sqlDB.Close()
 
-	if err := migrate(db); err != nil {
-		return err
-	}
 	if err := protectExistingAdmin(db); err != nil {
 		return err
 	}
@@ -74,7 +73,7 @@ func run() error {
 	auditRepo := persistence.NewAuditRepository(db)
 	unitOfWork := persistence.NewUnitOfWork(db)
 	userUC := usecase.NewUserUseCase(userRepo, credentials, unitOfWork)
-	if err := userUC.EnsureInitialAdmin(usecase.InitialAdminConfig{
+	if err := userUC.EnsureInitialAdmin(context.Background(), usecase.InitialAdminConfig{
 		Name:     cfg.InitialAdmin.Name,
 		Email:    cfg.InitialAdmin.Email,
 		Password: cfg.InitialAdmin.Password,
@@ -89,7 +88,9 @@ func run() error {
 	auditUC := usecase.NewAuditUseCase(auditRepo)
 	mediaUC := usecase.NewMediaUseCase(storage.NewLocalFileStorage("uploads"))
 
-	router := gin.Default()
+	gin.SetMode(gin.ReleaseMode)
+	router := gin.New()
+	router.Use(middleware.RequestID(), middleware.StructuredLogger(), middleware.StructuredRecovery())
 	router.Use(corsMiddleware(cfg.CORSAllowedOrigins))
 	delivery.RegisterRoutes(
 		router,
@@ -101,14 +102,17 @@ func run() error {
 		delivery.NewMenuHandler(menuUC),
 		delivery.NewRevisionHandler(revisionUC),
 		delivery.NewAuditHandler(auditUC),
-		delivery.NewMediaHandler(mediaUC),
+		delivery.NewMediaHandler(mediaUC, cfg.PublicBaseURL),
 		delivery.NewUserHandler(userUC),
 	)
 
 	server := &http.Server{
 		Addr:              "0.0.0.0:" + cfg.Port,
 		Handler:           router,
+		ReadTimeout:       30 * time.Second,
 		ReadHeaderTimeout: 10 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	// Nhận Ctrl+C hoặc tín hiệu dừng của Docker (SIGTERM).
@@ -121,7 +125,7 @@ func run() error {
 	}()
 	serverErr := make(chan error, 1)
 	go func() {
-		log.Printf("Backend đang chạy tại cổng %s...", cfg.Port)
+		slog.Info("server listening", "port", cfg.Port)
 		serverErr <- server.ListenAndServe()
 	}()
 
@@ -134,7 +138,7 @@ func run() error {
 	case <-ctx.Done():
 	}
 	stop()
-	log.Println("Nhận tín hiệu dừng, đang tắt server...")
+	slog.Info("shutdown signal received")
 
 	// Cho các request đang xử lý tối đa 15 giây để hoàn tất.
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -143,20 +147,20 @@ func run() error {
 		return fmt.Errorf("tắt server không thành công: %w", err)
 	}
 	<-schedulerDone
-	log.Println("Server đã tắt an toàn.")
+	slog.Info("server shut down cleanly")
 	return nil
 }
 
 // runScheduler quét bài hẹn giờ mỗi phút cho đến khi ctx bị hủy.
 func runScheduler(ctx context.Context, posts *usecase.PostUseCase) {
 	tick := func() {
-		count, err := posts.PublishDuePosts(time.Now())
+		count, err := posts.PublishDuePosts(ctx, time.Now())
 		if err != nil {
-			log.Printf("quét bài hẹn giờ lỗi: %v", err)
+			slog.Error("scheduled post scan failed", "error", err)
 			return
 		}
 		if count > 0 {
-			log.Printf("đã tự động đăng %d bài hẹn giờ", count)
+			slog.Info("scheduled posts published", "count", count)
 		}
 	}
 	tick()
@@ -191,25 +195,6 @@ func protectExistingAdmin(db *gorm.DB) error {
 	}
 	key := uint(1)
 	return db.Model(&admin).Update("root_admin_key", key).Error
-}
-
-func migrate(db *gorm.DB) error {
-	if err := db.AutoMigrate(
-		&persistence.UserModel{},
-		&persistence.CategoryModel{},
-		&persistence.PostModel{},
-		&persistence.TagModel{},
-		&persistence.RevisionModel{},
-		&persistence.AuditLogModel{},
-		&persistence.MenuModel{},
-		&persistence.MenuItemModel{},
-	); err != nil {
-		return err
-	}
-	if err := persistence.MigrateActivePostSlugIndex(db); err != nil {
-		return err
-	}
-	return persistence.MigrateScheduledStatus(db)
 }
 
 func seedDefaults(db *gorm.DB) error {

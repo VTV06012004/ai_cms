@@ -2,9 +2,9 @@ package usecase
 
 import (
 	"api/internal/domain"
-	"errors"
+	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 )
 
@@ -27,7 +27,7 @@ type CreatePostDTO struct {
 	ScheduledAt *time.Time
 }
 
-func (uc *PostUseCase) GetAllPosts(userRole string, userID uint, page domain.PageRequest) ([]domain.Post, domain.PageInfo, error) {
+func (uc *PostUseCase) GetAllPosts(ctx context.Context, userRole string, userID uint, page domain.PageRequest) ([]domain.Post, domain.PageInfo, error) {
 	criteria := domain.PostListCriteria{PublishedOnly: true}
 	switch domain.UserRole(userRole) {
 	case domain.UserRoleAdmin, domain.UserRoleEditor:
@@ -40,15 +40,15 @@ func (uc *PostUseCase) GetAllPosts(userRole string, userID uint, page domain.Pag
 		criteria.IncludePublished = true
 		criteria.PublishedOnly = false
 	}
-	posts, total, err := uc.postRepo.GetAll(criteria, page)
+	posts, total, err := uc.postRepo.GetAll(ctx, criteria, page)
 	if err != nil {
 		return nil, domain.PageInfo{}, err
 	}
 	return posts, page.Info(total), nil
 }
 
-func (uc *PostUseCase) GetPostByID(id uint, userRole string, userID uint) (*domain.Post, error) {
-	post, err := uc.postRepo.GetByID(id)
+func (uc *PostUseCase) GetPostByID(ctx context.Context, id uint, userRole string, userID uint) (*domain.Post, error) {
+	post, err := uc.postRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +59,7 @@ func (uc *PostUseCase) GetPostByID(id uint, userRole string, userID uint) (*doma
 	return post, nil
 }
 
-func (uc *PostUseCase) CreatePost(userID uint, userRole string, input CreatePostDTO, ipAddress string) (*domain.Post, error) {
+func (uc *PostUseCase) CreatePost(ctx context.Context, userID uint, userRole string, input CreatePostDTO, ipAddress string) (*domain.Post, error) {
 	role := domain.UserRole(userRole)
 	if !role.IsValid() {
 		return nil, domain.ErrInvalidRole
@@ -75,23 +75,25 @@ func (uc *PostUseCase) CreatePost(userID uint, userRole string, input CreatePost
 	if err != nil {
 		return nil, err
 	}
-	if err := post.ApplySchedule(input.ScheduledAt, time.Now()); err != nil {
+	now := time.Now()
+	if err := post.ApplySchedule(input.ScheduledAt, now); err != nil {
 		return nil, err
 	}
-	err = uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
-		created, err := repositories.Posts.Create(post, input.TagIDs)
+	post.SettleStatus(role, now)
+	err = uc.unitOfWork.WithinTransaction(ctx, func(repositories TransactionRepositories) error {
+		created, err := repositories.Posts.Create(ctx, post, input.TagIDs)
 		if err != nil {
 			return err
 		}
 		post = created
 		data := post.Data()
-		if err := repositories.Revisions.Create(snapshot(post, userID)); err != nil {
+		if err := repositories.Revisions.Create(ctx, snapshot(post, userID)); err != nil {
 			return fmt.Errorf("không thể lưu revision ban đầu: %w", err)
 		}
-		if err := repositories.Audits.RecordLog(userID, "CREATE_POST", fmt.Sprintf("Bài viết ID: %d", data.ID), fmt.Sprintf("Đã tạo bài viết: '%s'", data.Title), ipAddress); err != nil {
+		if err := repositories.Audits.RecordLog(ctx, userID, "CREATE_POST", fmt.Sprintf("Bài viết ID: %d", data.ID), fmt.Sprintf("Đã tạo bài viết: '%s'", data.Title), ipAddress); err != nil {
 			return fmt.Errorf("không thể ghi audit log: %w", err)
 		}
-		post, err = repositories.Posts.GetByID(data.ID)
+		post, err = repositories.Posts.GetByID(ctx, data.ID)
 		return err
 	})
 	if err != nil {
@@ -100,11 +102,11 @@ func (uc *PostUseCase) CreatePost(userID uint, userRole string, input CreatePost
 	return post, nil
 }
 
-func (uc *PostUseCase) UpdatePost(id, userID uint, userRole string, input CreatePostDTO, ipAddress string) (*domain.Post, error) {
+func (uc *PostUseCase) UpdatePost(ctx context.Context, id, userID uint, userRole string, input CreatePostDTO, ipAddress string) (*domain.Post, error) {
 	role := domain.UserRole(userRole)
 	var updated *domain.Post
-	err := uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
-		post, err := repositories.Posts.GetByID(id)
+	err := uc.unitOfWork.WithinTransaction(ctx, func(repositories TransactionRepositories) error {
+		post, err := repositories.Posts.GetByID(ctx, id)
 		if err != nil {
 			return err
 		}
@@ -112,7 +114,8 @@ func (uc *PostUseCase) UpdatePost(id, userID uint, userRole string, input Create
 			return domain.ErrPostAccessDenied
 		}
 		requestedStatus := domain.PostStatus(input.Status)
-		if requestedStatus != "" {
+		// Chỉ kiểm quyền khi trạng thái thực sự thay đổi; form sửa bài luôn gửi lại trạng thái hiện tại.
+		if requestedStatus != "" && requestedStatus != post.Data().Status {
 			if err := role.EnsureCanSetPostStatus(requestedStatus); err != nil {
 				return err
 			}
@@ -122,22 +125,24 @@ func (uc *PostUseCase) UpdatePost(id, userID uint, userRole string, input Create
 		if err := post.Update(input.Title, input.Slug, input.Content, domain.PostStatus(input.Status), input.CategoryID); err != nil {
 			return err
 		}
-		if err := post.ApplySchedule(input.ScheduledAt, time.Now()); err != nil {
+		now := time.Now()
+		if err := post.ApplySchedule(input.ScheduledAt, now); err != nil {
 			return err
 		}
-		if err := repositories.Revisions.Create(previous); err != nil {
+		post.SettleStatus(role, now)
+		if err := repositories.Revisions.Create(ctx, previous); err != nil {
 			return fmt.Errorf("không thể lưu revision trước khi cập nhật: %w", err)
 		}
-		updatedPost, err := repositories.Posts.Update(post, input.TagIDs)
+		updatedPost, err := repositories.Posts.Update(ctx, post, input.TagIDs)
 		if err != nil {
 			return err
 		}
 		post = updatedPost
 		data = post.Data()
-		if err := repositories.Audits.RecordLog(userID, "UPDATE_POST", fmt.Sprintf("Bài viết ID: %d", data.ID), fmt.Sprintf("Đã cập nhật bài viết: '%s'", data.Title), ipAddress); err != nil {
+		if err := repositories.Audits.RecordLog(ctx, userID, "UPDATE_POST", fmt.Sprintf("Bài viết ID: %d", data.ID), fmt.Sprintf("Đã cập nhật bài viết: '%s'", data.Title), ipAddress); err != nil {
 			return fmt.Errorf("không thể ghi audit log: %w", err)
 		}
-		updated, err = repositories.Posts.GetByID(data.ID)
+		updated, err = repositories.Posts.GetByID(ctx, data.ID)
 		return err
 	})
 	if err != nil {
@@ -146,10 +151,10 @@ func (uc *PostUseCase) UpdatePost(id, userID uint, userRole string, input Create
 	return updated, nil
 }
 
-func (uc *PostUseCase) DeletePost(id, userID uint, userRole, ipAddress string) error {
+func (uc *PostUseCase) DeletePost(ctx context.Context, id, userID uint, userRole, ipAddress string) error {
 	role := domain.UserRole(userRole)
-	return uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
-		post, err := repositories.Posts.GetByID(id)
+	return uc.unitOfWork.WithinTransaction(ctx, func(repositories TransactionRepositories) error {
+		post, err := repositories.Posts.GetByID(ctx, id)
 		if err != nil {
 			return err
 		}
@@ -157,17 +162,17 @@ func (uc *PostUseCase) DeletePost(id, userID uint, userRole, ipAddress string) e
 			return domain.ErrPostAccessDenied
 		}
 		data := post.Data()
-		if err := repositories.Posts.Delete(id); err != nil {
+		if err := repositories.Posts.Delete(ctx, id); err != nil {
 			return err
 		}
-		return repositories.Audits.RecordLog(userID, "DELETE_POST", fmt.Sprintf("Bài viết ID: %d", id), fmt.Sprintf("Đã xóa bài viết: '%s'", data.Title), ipAddress)
+		return repositories.Audits.RecordLog(ctx, userID, "DELETE_POST", fmt.Sprintf("Bài viết ID: %d", id), fmt.Sprintf("Đã xóa bài viết: '%s'", data.Title), ipAddress)
 	})
 }
 
-func (uc *PostUseCase) ModeratePost(id, moderatorID uint, status, reason, ipAddress string) (*domain.Post, error) {
+func (uc *PostUseCase) ModeratePost(ctx context.Context, id, moderatorID uint, status, reason, ipAddress string) (*domain.Post, error) {
 	var moderated *domain.Post
-	err := uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
-		post, err := repositories.Posts.GetByID(id)
+	err := uc.unitOfWork.WithinTransaction(ctx, func(repositories TransactionRepositories) error {
+		post, err := repositories.Posts.GetByID(ctx, id)
 		if err != nil {
 			return err
 		}
@@ -175,15 +180,13 @@ func (uc *PostUseCase) ModeratePost(id, moderatorID uint, status, reason, ipAddr
 			return err
 		}
 		data := post.Data()
-		updatedPost, err := repositories.Posts.Update(post, tagIDs(data.Tags))
-		if err != nil {
+		if _, err := repositories.Posts.Update(ctx, post, tagIDs(data.Tags)); err != nil {
 			return err
 		}
-		post = updatedPost
-		if err := repositories.Audits.RecordLog(moderatorID, "MODERATE_POST", fmt.Sprintf("Bài viết ID: %d", id), fmt.Sprintf("Đổi trạng thái bài viết thành '%s'", status), ipAddress); err != nil {
+		if err := repositories.Audits.RecordLog(ctx, moderatorID, "MODERATE_POST", fmt.Sprintf("Bài viết ID: %d", id), fmt.Sprintf("Đổi trạng thái bài viết thành '%s'", status), ipAddress); err != nil {
 			return fmt.Errorf("không thể ghi audit log: %w", err)
 		}
-		moderated, err = repositories.Posts.GetByID(id)
+		moderated, err = repositories.Posts.GetByID(ctx, id)
 		return err
 	})
 	if err != nil {
@@ -204,39 +207,37 @@ func tagIDs(tags []domain.Tag) []uint {
 	return ids
 }
 
-// PublishDuePosts đăng các bài hẹn giờ đã đến hạn; trả về số bài đã đăng.
-func (uc *PostUseCase) PublishDuePosts(now time.Time) (int, error) {
-	due, err := uc.postRepo.ListDue(now, 100)
+// PublishDuePosts đăng các bài hẹn giờ đã đến hạn; trả về số bài do chính lần gọi này đăng.
+//
+// Danh sách ListDue chỉ là danh sách ứng viên: có thể hai instance cùng thấy một bài. Người
+// thắng được quyết định bởi PublishIfDue (một UPDATE có điều kiện); chỉ khi nó trả về true
+// mới ghi audit, nên bài không bao giờ bị đăng hay ghi log hai lần.
+func (uc *PostUseCase) PublishDuePosts(ctx context.Context, now time.Time) (int, error) {
+	due, err := uc.postRepo.ListDue(ctx, now, 100)
 	if err != nil {
 		return 0, err
 	}
 	published := 0
 	for _, candidate := range due {
-		id := candidate.Data().ID
-		err := uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
-			// Đọc lại trong transaction để tránh đăng trùng/đăng sai khi bài vừa bị sửa.
-			post, err := repositories.Posts.GetByID(id)
-			if err != nil {
+		data := candidate.Data()
+		won := false
+		err := uc.unitOfWork.WithinTransaction(ctx, func(repositories TransactionRepositories) error {
+			ok, err := repositories.Posts.PublishIfDue(ctx, data.ID, now)
+			if err != nil || !ok {
 				return err
 			}
-			if err := post.PublishScheduled(now); err != nil {
-				return err
-			}
-			data := post.Data()
-			if _, err := repositories.Posts.Update(post, tagIDs(data.Tags)); err != nil {
-				return err
-			}
-			return repositories.Audits.RecordLog(data.AuthorID, "AUTO_PUBLISH_POST",
-				fmt.Sprintf("Bài viết ID: %d", id),
+			won = true
+			return repositories.Audits.RecordLog(ctx, data.AuthorID, "AUTO_PUBLISH_POST",
+				fmt.Sprintf("Bài viết ID: %d", data.ID),
 				fmt.Sprintf("Tự động đăng bài hẹn giờ: '%s'", data.Title), "system")
 		})
 		if err != nil {
-			if !errors.Is(err, domain.ErrPostNotDue) {
-				log.Printf("không thể tự động đăng bài %d: %v", id, err)
-			}
+			slog.Error("scheduled post publish failed", "post_id", data.ID, "error", err)
 			continue
 		}
-		published++
+		if won {
+			published++
+		}
 	}
 	return published, nil
 }

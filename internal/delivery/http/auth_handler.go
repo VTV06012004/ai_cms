@@ -2,6 +2,7 @@ package http
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -10,10 +11,22 @@ import (
 
 type AuthHandler struct {
 	userUseCase *usecase.UserUseCase
+	rateLimiter *authRateLimiter
 }
 
 func NewAuthHandler(uc *usecase.UserUseCase) *AuthHandler {
-	return &AuthHandler{userUseCase: uc}
+	return &AuthHandler{userUseCase: uc, rateLimiter: newAuthRateLimiter()}
+}
+
+func (h *AuthHandler) RateLimitIP() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !h.rateLimiter.allowIP(c.ClientIP(), time.Now()) {
+			writeError(c, errAuthRateLimitExceeded)
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
 }
 
 func (h *AuthHandler) Register(c *gin.Context) {
@@ -26,8 +39,12 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		writeInvalidRequest(c)
 		return
 	}
+	if !h.rateLimiter.allowEmail(request.Email, time.Now()) {
+		writeError(c, errAuthRateLimitExceeded)
+		return
+	}
 
-	userID, err := h.userUseCase.Register(usecase.RegisterDTO{
+	userID, err := h.userUseCase.Register(c.Request.Context(), usecase.RegisterDTO{
 		Name: request.Name, Email: request.Email, Password: request.Password,
 	}, c.ClientIP())
 	if err != nil {
@@ -47,8 +64,12 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		writeInvalidRequest(c)
 		return
 	}
+	if !h.rateLimiter.allowEmail(request.Email, time.Now()) {
+		writeError(c, errAuthRateLimitExceeded)
+		return
+	}
 
-	res, err := h.userUseCase.Login(usecase.LoginDTO{Email: request.Email, Password: request.Password}, c.ClientIP())
+	res, err := h.userUseCase.Login(c.Request.Context(), usecase.LoginDTO{Email: request.Email, Password: request.Password}, c.ClientIP())
 	if err != nil {
 		writeError(c, err)
 		return

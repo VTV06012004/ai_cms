@@ -11,6 +11,7 @@ var (
 	ErrCannotChangeRootAdmin   = errors.New("không được phép thay đổi quyền của quản trị viên gốc")
 	ErrUserNameRequired        = errors.New("tên người dùng là bắt buộc")
 	ErrInvalidEmail            = errors.New("email không hợp lệ")
+	ErrPasswordTooShort        = errors.New("mật khẩu phải có ít nhất 6 ký tự")
 	ErrPasswordHashRequired    = errors.New("mật khẩu đã mã hóa là bắt buộc")
 	ErrPostTitleRequired       = errors.New("tiêu đề bài viết là bắt buộc")
 	ErrPostSlugRequired        = errors.New("slug bài viết là bắt buộc")

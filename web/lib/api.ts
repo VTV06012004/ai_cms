@@ -111,16 +111,12 @@ function signOutAndRedirect(): void {
   }
 }
 
-// Every page imports this module, so the shared axios instance gets the same
-// behaviour everywhere: token attached automatically, sign out on 401.
-if (typeof window !== "undefined") {
-  const globalFlag = "__cmsSessionHandlingInstalled";
-  const target = window as unknown as Record<string, unknown>;
-  if (!target[globalFlag]) {
-    target[globalFlag] = true;
-    installSessionHandling(axios, {
-      getToken,
-      onSessionExpired: signOutAndRedirect,
-    });
-  }
-}
+// One axios instance for the whole app. Token attachment and sign-out on 401
+// are installed on this instance only, so pages must call apiClient and not
+// the global axios.
+export const apiClient = axios.create();
+
+installSessionHandling(apiClient, {
+  getToken,
+  onSessionExpired: signOutAndRedirect,
+});
