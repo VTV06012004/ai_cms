@@ -47,11 +47,8 @@ export default function CreatePostPage() {
 
     const fetchData = async () => {
       try {
-        const token = localStorage.getItem('token');
         // 1. Lấy Categories
-        const catRes = await apiClient.get(apiUrl('categories'), {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const catRes = await apiClient.get(apiUrl('categories'));
         const categoryData = Array.isArray(catRes.data) ? catRes.data : (catRes.data.data || []);
         setCategories(categoryData);
         if (categoryData.length > 0) {
@@ -59,9 +56,7 @@ export default function CreatePostPage() {
         }
 
         // 2. Lấy Tags
-        const tagRes = await apiClient.get(apiUrl('tags'), {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const tagRes = await apiClient.get(apiUrl('tags'));
         const tagData = Array.isArray(tagRes.data) ? tagRes.data : (tagRes.data.data || []);
         setTags(tagData);
 
@@ -95,12 +90,7 @@ export default function CreatePostPage() {
     formData.append('file', file);
 
     try {
-      const token = localStorage.getItem('token');
-      const res = await apiClient.post(apiUrl('upload'), formData, {
-        headers: { 
-          Authorization: `Bearer ${token}` 
-        }
-      });
+      const res = await apiClient.post(apiUrl('upload'), formData);
 
       const imageUrl = mediaUrl(res.data.url);
       setPreviewImage(imageUrl); 
@@ -154,11 +144,6 @@ export default function CreatePostPage() {
             status === 'scheduled' && scheduledAt
               ? new Date(scheduledAt).toISOString()
               : null,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
         }
       );
 

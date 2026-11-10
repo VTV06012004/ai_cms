@@ -47,7 +47,6 @@ export default function AuditLogsPage() {
         }
 
         const res = await apiClient.get(apiUrl('audit-logs'), {
-          headers: { Authorization: `Bearer ${token}` },
           params: { page: 1, per_page: 20 },
         });
 
@@ -71,9 +70,7 @@ export default function AuditLogsPage() {
   const handleLoadMore = async () => {
     setLoadingMore(true);
     try {
-      const token = localStorage.getItem('token');
       const res = await apiClient.get(apiUrl('audit-logs'), {
-        headers: { Authorization: `Bearer ${token}` },
         params: { page: page + 1, per_page: 20 },
       });
       setLogs((prev: AuditLog[]) => [...prev, ...(res.data.data || [])]);
