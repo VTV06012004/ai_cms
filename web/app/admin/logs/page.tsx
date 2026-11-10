@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import axios from 'axios';
-import { apiUrl } from '@/lib/api';
+import { apiClient, apiUrl } from '@/lib/api';
 
 interface User {
   id: number;
@@ -47,7 +46,7 @@ export default function AuditLogsPage() {
           return;
         }
 
-        const res = await axios.get(apiUrl('audit-logs'), {
+        const res = await apiClient.get(apiUrl('audit-logs'), {
           headers: { Authorization: `Bearer ${token}` },
           params: { page: 1, per_page: 20 },
         });
@@ -73,7 +72,7 @@ export default function AuditLogsPage() {
     setLoadingMore(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get(apiUrl('audit-logs'), {
+      const res = await apiClient.get(apiUrl('audit-logs'), {
         headers: { Authorization: `Bearer ${token}` },
         params: { page: page + 1, per_page: 20 },
       });

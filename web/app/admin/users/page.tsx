@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import axios from 'axios';
-import { apiUrl } from '@/lib/api';
+import { apiClient, apiUrl } from '@/lib/api';
 
 interface User {
   id: number;
@@ -38,7 +37,7 @@ export default function AdminUsersPage() {
 
     const fetchUsers = async () => {
       try {
-        const res = await axios.get(apiUrl('admin/users'), {
+        const res = await apiClient.get(apiUrl('admin/users'), {
           headers: { Authorization: `Bearer ${token}` },
           params: { page: 1, per_page: 20 },
         });
@@ -58,7 +57,7 @@ export default function AdminUsersPage() {
     setLoadingMore(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get(apiUrl('admin/users'), {
+      const res = await apiClient.get(apiUrl('admin/users'), {
         headers: { Authorization: `Bearer ${token}` },
         params: { page: page + 1, per_page: 20 },
       });
@@ -82,7 +81,7 @@ export default function AdminUsersPage() {
     try {
       setUpdatingId(userId);
       const token = localStorage.getItem('token');
-      await axios.put(
+      await apiClient.put(
         apiUrl(`admin/users/${userId}/role`),
         { role: newRole },
         { headers: { Authorization: `Bearer ${token}` } }

@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import axios from 'axios';
-import { apiUrl, mediaUrl } from '@/lib/api';
+import { isAxiosError } from 'axios';
+import { apiClient, apiUrl, mediaUrl } from '@/lib/api';
 import { removeMarkdownImage } from '@/lib/markdown';
 import MediaPicker from '@/app/components/MediaPicker';
 
@@ -49,7 +49,7 @@ export default function CreatePostPage() {
       try {
         const token = localStorage.getItem('token');
         // 1. Lấy Categories
-        const catRes = await axios.get(apiUrl('categories'), {
+        const catRes = await apiClient.get(apiUrl('categories'), {
           headers: { Authorization: `Bearer ${token}` },
         });
         const categoryData = Array.isArray(catRes.data) ? catRes.data : (catRes.data.data || []);
@@ -59,7 +59,7 @@ export default function CreatePostPage() {
         }
 
         // 2. Lấy Tags
-        const tagRes = await axios.get(apiUrl('tags'), {
+        const tagRes = await apiClient.get(apiUrl('tags'), {
           headers: { Authorization: `Bearer ${token}` },
         });
         const tagData = Array.isArray(tagRes.data) ? tagRes.data : (tagRes.data.data || []);
@@ -96,7 +96,7 @@ export default function CreatePostPage() {
 
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.post(apiUrl('upload'), formData, {
+      const res = await apiClient.post(apiUrl('upload'), formData, {
         headers: { 
           Authorization: `Bearer ${token}` 
         }
@@ -108,7 +108,7 @@ export default function CreatePostPage() {
       alert('Upload ảnh thành công và đã chèn vào nội dung!');
     } catch (err) {
       console.error('Lỗi upload ảnh:', err);
-      const message = axios.isAxiosError(err) ? err.response?.data?.error : undefined;
+      const message = isAxiosError(err) ? err.response?.data?.error : undefined;
       alert(message || 'Upload ảnh thất bại!');
     }
   };
@@ -141,7 +141,7 @@ export default function CreatePostPage() {
         return;
       }
 
-      await axios.post(
+      await apiClient.post(
         apiUrl('posts'),
         {
           title,

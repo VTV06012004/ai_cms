@@ -2,8 +2,8 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import axios from 'axios';
-import { apiUrl, mediaUrl } from '@/lib/api';
+import { isAxiosError } from 'axios';
+import { apiClient, apiUrl, mediaUrl } from '@/lib/api';
 import { removeMarkdownImage } from '@/lib/markdown';
 import MediaPicker from '@/app/components/MediaPicker';
 
@@ -74,7 +74,7 @@ function EditPostForm() {
   const fetchRevisions = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get(apiUrl(`posts-revisions/${id}`), {
+      const res = await apiClient.get(apiUrl(`posts-revisions/${id}`), {
         headers: { Authorization: `Bearer ${token}` },
       });
       setRevisions(res.data.data || []);
@@ -90,19 +90,19 @@ function EditPostForm() {
     const fetchData = async () => {
       try {
         const token = localStorage.getItem('token');
-        const catRes = await axios.get(apiUrl('categories'), {
+        const catRes = await apiClient.get(apiUrl('categories'), {
           headers: { Authorization: `Bearer ${token}` },
         });
         const catData = Array.isArray(catRes.data) ? catRes.data : (catRes.data.data || []);
         setCategories(catData);
 
-        const tagRes = await axios.get(apiUrl('tags'), {
+        const tagRes = await apiClient.get(apiUrl('tags'), {
           headers: { Authorization: `Bearer ${token}` },
         });
         const tagData = Array.isArray(tagRes.data) ? tagRes.data : (tagRes.data.data || []);
         setTags(tagData);
 
-        const postRes = await axios.get(apiUrl(`posts/${id}`), {
+        const postRes = await apiClient.get(apiUrl(`posts/${id}`), {
           headers: { Authorization: `Bearer ${token}` },
         });
         const post = postRes.data.data || postRes.data; 
@@ -154,7 +154,7 @@ function EditPostForm() {
 
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.post(apiUrl('upload'), formData, {
+      const res = await apiClient.post(apiUrl('upload'), formData, {
         headers: { 
           Authorization: `Bearer ${token}` 
         }
@@ -166,7 +166,7 @@ function EditPostForm() {
       alert('Upload ảnh thành công và đã chèn vào nội dung!');
     } catch (err) {
       console.error('Lỗi upload ảnh:', err);
-      const message = axios.isAxiosError(err) ? err.response?.data?.error : undefined;
+      const message = isAxiosError(err) ? err.response?.data?.error : undefined;
       alert(message || 'Upload ảnh thất bại!');
     }
   };
@@ -187,7 +187,7 @@ function EditPostForm() {
 
     try {
       const token = localStorage.getItem('token');
-      await axios.put(
+      await apiClient.put(
         apiUrl(`posts/${id}`),
         {
           title,
@@ -239,13 +239,13 @@ function EditPostForm() {
     setComparing(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get(apiUrl('revisions/compare'), {
+      const res = await apiClient.get(apiUrl('revisions/compare'), {
         params: { from, to },
         headers: { Authorization: `Bearer ${token}` },
       });
       setComparison(res.data.data);
     } catch (err) {
-      const message = axios.isAxiosError(err) ? err.response?.data?.error : undefined;
+      const message = isAxiosError(err) ? err.response?.data?.error : undefined;
       alert(message || 'Không thể so sánh các phiên bản');
     } finally {
       setComparing(false);
@@ -266,7 +266,7 @@ function EditPostForm() {
     setRestoringId(rev.id);
     try {
       const token = localStorage.getItem('token');
-      await axios.post(
+      await apiClient.post(
         apiUrl(`revisions/${rev.id}/restore`),
         {},
         {

@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import axios from 'axios';
-import { apiUrl, mediaUrl } from '@/lib/api';
+import { apiClient, apiUrl, mediaUrl } from '@/lib/api';
 interface Category {
   id: number;
   name: string;
@@ -82,8 +81,8 @@ export default function PostsPage() {
         const token = localStorage.getItem('token');
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
         const [postsRes, catRes] = await Promise.all([
-          axios.get(apiUrl('posts'), { headers, params: { page: 1, per_page: 20 } }),
-          axios.get(apiUrl('categories'))
+          apiClient.get(apiUrl('posts'), { headers, params: { page: 1, per_page: 20 } }),
+          apiClient.get(apiUrl('categories'))
         ]);
 
         setPosts(postsRes.data.data || []);
@@ -103,7 +102,7 @@ export default function PostsPage() {
     setLoadingMore(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get(apiUrl('posts'), {
+      const res = await apiClient.get(apiUrl('posts'), {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
         params: { page: page + 1, per_page: 20 },
       });
@@ -132,7 +131,7 @@ export default function PostsPage() {
 
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(apiUrl(`posts/${id}`), {
+      await apiClient.delete(apiUrl(`posts/${id}`), {
         headers: { Authorization: `Bearer ${token}` }
       });
 
@@ -156,7 +155,7 @@ export default function PostsPage() {
 
     try {
       const token = localStorage.getItem('token');
-      await axios.put(
+      await apiClient.put(
         apiUrl(`posts/${postId}/moderate`),
         { status: newStatus, rejection_reason },
         { headers: { Authorization: `Bearer ${token}` } }

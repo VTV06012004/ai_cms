@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import axios from 'axios';
-import { apiUrl, mediaUrl } from '@/lib/api';
+import { apiClient, apiUrl, mediaUrl } from '@/lib/api';
 
 export interface MediaItem {
   name: string;
@@ -27,7 +26,7 @@ export default function MediaPicker({ onSelect, onClose }: Props) {
     setLoading(true);
     setError('');
     try {
-      const res = await axios.get(apiUrl('media'), { params: { page: nextPage, per_page: 24 } });
+      const res = await apiClient.get(apiUrl('media'), { params: { page: nextPage, per_page: 24 } });
       setItems((prev: MediaItem[]) => (nextPage === 1 ? res.data.data : [...prev, ...res.data.data]));
       setTotalPages(res.data.pagination?.total_pages ?? 0);
       setPage(nextPage);

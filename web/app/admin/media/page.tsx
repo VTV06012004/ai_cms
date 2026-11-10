@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import axios from 'axios';
-import { apiUrl, mediaUrl } from '@/lib/api';
+import { isAxiosError } from 'axios';
+import { apiClient, apiUrl, mediaUrl } from '@/lib/api';
 import type { MediaItem } from '@/app/components/MediaPicker';
 
 export default function MediaLibraryPage() {
@@ -22,7 +22,7 @@ export default function MediaLibraryPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await axios.get(apiUrl('media'), { params: { page: nextPage, per_page: 24 } });
+      const res = await apiClient.get(apiUrl('media'), { params: { page: nextPage, per_page: 24 } });
       setItems((prev: MediaItem[]) => (nextPage === 1 ? res.data.data : [...prev, ...res.data.data]));
       setTotalPages(res.data.pagination?.total_pages ?? 0);
       setTotal(res.data.pagination?.total ?? 0);
@@ -46,10 +46,10 @@ export default function MediaLibraryPage() {
     formData.append('file', file);
     setUploading(true);
     try {
-      await axios.post(apiUrl('upload'), formData);
+      await apiClient.post(apiUrl('upload'), formData);
       await load(1);
     } catch (err) {
-      const message = axios.isAxiosError(err) ? err.response?.data?.error : undefined;
+      const message = isAxiosError(err) ? err.response?.data?.error : undefined;
       alert(message || 'Upload ảnh thất bại!');
     } finally {
       setUploading(false);
@@ -60,11 +60,11 @@ export default function MediaLibraryPage() {
   const handleDelete = async (item: MediaItem) => {
     if (!confirm(`Xóa ảnh ${item.name}? Các bài viết đang dùng ảnh này sẽ bị mất ảnh.`)) return;
     try {
-      await axios.delete(apiUrl(`media/${encodeURIComponent(item.name)}`));
+      await apiClient.delete(apiUrl(`media/${encodeURIComponent(item.name)}`));
       setItems((prev: MediaItem[]) => prev.filter((i) => i.name !== item.name));
       setTotal((n) => Math.max(0, n - 1));
     } catch (err) {
-      const message = axios.isAxiosError(err) ? err.response?.data?.error : undefined;
+      const message = isAxiosError(err) ? err.response?.data?.error : undefined;
       alert(message || 'Xóa ảnh thất bại!');
     }
   };
