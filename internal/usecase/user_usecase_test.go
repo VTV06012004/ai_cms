@@ -437,3 +437,30 @@ func TestLoginSucceedsWhenPasswordHashUpgradeFails(t *testing.T) {
 		t.Fatalf("password hash = %q, want legacy hash kept", got)
 	}
 }
+
+func TestLoginTrimsSurroundingSpacesInEmail(t *testing.T) {
+	users := newUserRepositoryStub()
+	useCase := newTestUserUseCase(users, &auditRepositoryStub{})
+	if _, err := useCase.Register(context.Background(), RegisterDTO{
+		Name: "Test User", Email: "user@example.com", Password: "secret1",
+	}, ""); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+
+	if _, err := useCase.Login(context.Background(), LoginDTO{
+		Email: "  user@example.com\t", Password: "secret1",
+	}, ""); err != nil {
+		t.Fatalf("login with surrounding spaces in the email: %v", err)
+	}
+}
+
+func TestLoginRejectsMalformedEmailWithoutLookingUpTheUser(t *testing.T) {
+	users := newUserRepositoryStub()
+	users.lookupErr = errors.New("the repository must not be queried")
+	useCase := newTestUserUseCase(users, &auditRepositoryStub{})
+
+	_, err := useCase.Login(context.Background(), LoginDTO{Email: "not-an-email", Password: "secret1"}, "")
+	if !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("malformed email: expected ErrInvalidCredentials, got %v", err)
+	}
+}
