@@ -35,6 +35,7 @@ var (
 	ErrCategoryHasChildren     = errors.New("danh mục còn danh mục con, không thể xóa")
 	ErrInvalidCategoryParent   = errors.New("danh mục cha không hợp lệ")
 	ErrTagNotFound             = errors.New("không tìm thấy thẻ")
+	ErrPostTagsNotFound        = errors.New("một hoặc nhiều thẻ của bài viết không tồn tại")
 	ErrTagAlreadyExists        = errors.New("tên hoặc slug của thẻ đã tồn tại")
 	ErrTagNameRequired         = errors.New("tên thẻ là bắt buộc")
 	ErrTagSlugRequired         = errors.New("slug thẻ là bắt buộc")

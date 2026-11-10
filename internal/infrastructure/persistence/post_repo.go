@@ -113,14 +113,33 @@ func translatePostWriteError(err error) error {
 	return err
 }
 
+// replacePostTags thay toàn bộ thẻ của bài viết. Mọi tag_id phải tồn tại:
+// trả ErrPostTagsNotFound thay vì lặng lẽ bỏ qua id sai (giao dịch sẽ rollback).
 func replacePostTags(tx *gorm.DB, post *PostModel, tagIDs []uint) error {
+	unique := uniqueTagIDs(tagIDs)
 	var tags []TagModel
-	if len(tagIDs) > 0 {
-		if err := tx.Find(&tags, tagIDs).Error; err != nil {
+	if len(unique) > 0 {
+		if err := tx.Find(&tags, unique).Error; err != nil {
 			return err
+		}
+		if len(tags) != len(unique) {
+			return domain.ErrPostTagsNotFound
 		}
 	}
 	return tx.Model(post).Association("Tags").Replace(tags)
+}
+
+func uniqueTagIDs(ids []uint) []uint {
+	seen := make(map[uint]struct{}, len(ids))
+	unique := make([]uint, 0, len(ids))
+	for _, id := range ids {
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+	return unique
 }
 
 func (r *PostRepository) ListDue(ctx context.Context, now time.Time, limit int) ([]domain.Post, error) {
