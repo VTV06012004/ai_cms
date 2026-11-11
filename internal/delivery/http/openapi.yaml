@@ -86,6 +86,10 @@ paths:
       responses:
         '200':
           description: Đăng nhập thành công
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+              description: Refresh token HttpOnly, được dùng tự động khi access token hết hạn.
           content:
             application/json:
               schema:
@@ -102,6 +106,42 @@ paths:
                       role: { $ref: '#/components/schemas/Role' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/auth/refresh:
+    post:
+      tags: [Xác thực]
+      summary: Làm mới access token bằng refresh cookie
+      description: Xoay refresh cookie HttpOnly và trả access token mới cùng thông tin vai trò hiện tại.
+      responses:
+        '200':
+          description: Phiên được làm mới
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+              description: Refresh token mới (HttpOnly, Secure theo cấu hình).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  user:
+                    type: object
+                    properties:
+                      id: { type: integer }
+                      name: { type: string }
+                      email: { type: string }
+                      role: { $ref: '#/components/schemas/Role' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/auth/logout:
+    post:
+      tags: [Xác thực]
+      summary: Thu hồi refresh token và đăng xuất
+      responses:
+        '204': { description: Đã đăng xuất }
+        '403': { $ref: '#/components/responses/Forbidden' }
 
   /api/posts:
     get:
@@ -576,7 +616,10 @@ paths:
                 type: object
                 properties:
                   message: { type: string }
-                  url: { type: string, example: 'http://localhost:8081/uploads/1730000000000000000.png' }
+                  url:
+                    type: string
+                    description: URL tuyệt đối nếu cấu hình PUBLIC_BASE_URL, nếu không là đường dẫn tương đối /uploads/...
+                    example: 'http://localhost:8081/uploads/1730000000000000000.png'
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '413':
@@ -873,7 +916,6 @@ components:
         title: { type: string }
         slug: { type: string }
         content: { type: string }
-        excerpt: { type: string }
         status: { $ref: '#/components/schemas/PostStatus' }
         rejection_reason: { type: string }
         author_id: { type: integer }
@@ -882,8 +924,6 @@ components:
         moderator: { $ref: '#/components/schemas/User' }
         category_id: { type: integer }
         category: { $ref: '#/components/schemas/Category' }
-        seo_title: { type: string }
-        seo_description: { type: string }
         published_at: { type: string, format: date-time, nullable: true }
         scheduled_at:
           type: string

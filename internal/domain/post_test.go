@@ -202,3 +202,74 @@ func TestAuthorCannotSetScheduledStatus(t *testing.T) {
 		t.Fatalf("editor should be allowed, got %v", err)
 	}
 }
+
+func TestApplyScheduleKeepsExistingTimeWhenOmitted(t *testing.T) {
+	now := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	existing := now.Add(-time.Minute) // đã quá hạn, đang chờ tác vụ nền đăng
+	post := ReconstitutePost(PostData{Status: PostStatusScheduled, ScheduledAt: &existing})
+
+	if err := post.ApplySchedule(nil, now); err != nil {
+		t.Fatalf("ApplySchedule returned error: %v", err)
+	}
+	if got := post.Data().ScheduledAt; got == nil || !got.Equal(existing) {
+		t.Fatalf("scheduled time = %v, want %v", got, existing)
+	}
+}
+
+func TestApplyScheduleAcceptsUnchangedTimeWithinTheSameMinute(t *testing.T) {
+	now := time.Date(2026, 1, 1, 10, 0, 30, 0, time.UTC)
+	existing := time.Date(2026, 1, 1, 9, 59, 45, 0, time.UTC)
+	resent := time.Date(2026, 1, 1, 9, 59, 0, 0, time.UTC) // form chỉ gửi đến phút
+	post := ReconstitutePost(PostData{Status: PostStatusScheduled, ScheduledAt: &existing})
+
+	if err := post.ApplySchedule(&resent, now); err != nil {
+		t.Fatalf("ApplySchedule returned error: %v", err)
+	}
+	if got := post.Data().ScheduledAt; got == nil || !got.Equal(existing) {
+		t.Fatalf("scheduled time = %v, want the original %v", got, existing)
+	}
+	changedToPast := time.Date(2026, 1, 1, 9, 0, 0, 0, time.UTC)
+	if err := post.ApplySchedule(&changedToPast, now); !errors.Is(err, ErrInvalidScheduleTime) {
+		t.Fatalf("expected ErrInvalidScheduleTime for a new past time, got %v", err)
+	}
+}
+
+func TestSettleStatusSendsAuthorEditsBackToReview(t *testing.T) {
+	publishedAt := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	scheduledAt := publishedAt.Add(48 * time.Hour)
+	tests := []struct {
+		name string
+		data PostData
+		role UserRole
+		want PostStatus
+	}{
+		{"author edits published", PostData{Status: PostStatusPublished, PublishedAt: &publishedAt}, UserRoleAuthor, PostStatusReview},
+		{"author edits scheduled", PostData{Status: PostStatusScheduled, ScheduledAt: &scheduledAt}, UserRoleAuthor, PostStatusReview},
+		{"editor edits published", PostData{Status: PostStatusPublished, PublishedAt: &publishedAt}, UserRoleEditor, PostStatusPublished},
+		{"author edits draft", PostData{Status: PostStatusDraft}, UserRoleAuthor, PostStatusDraft},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			post := ReconstitutePost(test.data)
+			post.SettleStatus(test.role, publishedAt.Add(time.Hour))
+			if got := post.Data().Status; got != test.want {
+				t.Fatalf("status = %q, want %q", got, test.want)
+			}
+			if test.want == PostStatusReview && (post.Data().PublishedAt != nil || post.Data().ScheduledAt != nil) {
+				t.Fatal("a post sent back to review must lose its publication and schedule times")
+			}
+		})
+	}
+}
+
+func TestSettleStatusRecordsPublicationTimeOnlyOnce(t *testing.T) {
+	first := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	post := ReconstitutePost(PostData{Status: PostStatusPublished})
+
+	post.SettleStatus(UserRoleEditor, first)
+	post.SettleStatus(UserRoleEditor, first.Add(time.Hour))
+
+	if got := post.Data().PublishedAt; got == nil || !got.Equal(first) {
+		t.Fatalf("published_at = %v, want %v", got, first)
+	}
+}

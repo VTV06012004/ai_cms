@@ -1,6 +1,8 @@
 package persistence
 
 import (
+	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"os"
@@ -13,9 +15,11 @@ import (
 	"gorm.io/gorm"
 
 	"api/internal/domain"
+	"api/internal/infrastructure/migrate"
+	sqlfiles "api/migrations"
 )
 
-func newPostSlugMySQLTestDB(t *testing.T, createLegacyIndex bool) (*gorm.DB, uint, uint) {
+func newPostSlugMySQLTestDB(t *testing.T) (*gorm.DB, uint, uint) {
 	t.Helper()
 	dsn := os.Getenv("MYSQL_TEST_DSN")
 	if dsn == "" {
@@ -55,15 +59,21 @@ func newPostSlugMySQLTestDB(t *testing.T, createLegacyIndex bool) (*gorm.DB, uin
 	}
 	t.Cleanup(func() { _ = sqlDB.Close() })
 
-	if err := db.AutoMigrate(&UserModel{}, &CategoryModel{}, &TagModel{}, &PostModel{}); err != nil {
-		t.Fatalf("auto-migrate test schema: %v", err)
+	migrationDSN, err := migrate.WithMultiStatements(config.FormatDSN())
+	if err != nil {
+		t.Fatalf("build migration DSN: %v", err)
 	}
-	if createLegacyIndex {
-		if err := db.Exec("CREATE UNIQUE INDEX idx_posts_slug_deleted ON posts (slug, deleted_at)").Error; err != nil {
-			t.Fatalf("create legacy slug index: %v", err)
-		}
-	} else if err := MigrateActivePostSlugIndex(db); err != nil {
-		t.Fatalf("migrate active post slug index: %v", err)
+	migrationDB, err := sql.Open("mysql", migrationDSN)
+	if err != nil {
+		t.Fatalf("open migration connection: %v", err)
+	}
+	t.Cleanup(func() { _ = migrationDB.Close() })
+	migrations, err := migrate.Load(sqlfiles.FS)
+	if err != nil {
+		t.Fatalf("load migrations: %v", err)
+	}
+	if err := migrate.Run(context.Background(), migrationDB, migrations, t.Logf); err != nil {
+		t.Fatalf("apply migrations to test schema: %v", err)
 	}
 
 	user := UserModel{Name: "Test Author", Email: "author@example.com", PasswordHash: "test-hash", Role: "author"}
@@ -110,18 +120,18 @@ func TestTranslatePostWriteErrorDoesNotMislabelOtherUniqueConflicts(t *testing.T
 }
 
 func TestPostRepositoryMySQLEnforcesActiveSlugUniquenessAndAllowsReuseAfterDelete(t *testing.T) {
-	db, userID, categoryID := newPostSlugMySQLTestDB(t, false)
+	db, userID, categoryID := newPostSlugMySQLTestDB(t)
 	repository := &PostRepository{db: db}
 
-	first, err := repository.Create(newTestPost(t, userID, categoryID, "duplicate-slug"), nil)
+	first, err := repository.Create(context.Background(), newTestPost(t, userID, categoryID, "duplicate-slug"), nil)
 	if err != nil {
 		t.Fatalf("create first post: %v", err)
 	}
-	if _, err := repository.Create(newTestPost(t, userID, categoryID, "duplicate-slug"), nil); !errors.Is(err, domain.ErrPostSlugAlreadyExists) {
+	if _, err := repository.Create(context.Background(), newTestPost(t, userID, categoryID, "duplicate-slug"), nil); !errors.Is(err, domain.ErrPostSlugAlreadyExists) {
 		t.Fatalf("duplicate active slug error = %v, want ErrPostSlugAlreadyExists", err)
 	}
 
-	second, err := repository.Create(newTestPost(t, userID, categoryID, "other-slug"), nil)
+	second, err := repository.Create(context.Background(), newTestPost(t, userID, categoryID, "other-slug"), nil)
 	if err != nil {
 		t.Fatalf("create second post: %v", err)
 	}
@@ -129,7 +139,7 @@ func TestPostRepositoryMySQLEnforcesActiveSlugUniquenessAndAllowsReuseAfterDelet
 	if err := second.Update("Updated title", "duplicate-slug", "updated content", domain.PostStatusDraft, categoryID); err != nil {
 		t.Fatalf("update post domain data: %v", err)
 	}
-	if _, err := repository.Update(second, nil); !errors.Is(err, domain.ErrPostSlugAlreadyExists) {
+	if _, err := repository.Update(context.Background(), second, nil); !errors.Is(err, domain.ErrPostSlugAlreadyExists) {
 		t.Fatalf("duplicate slug on update error = %v, want ErrPostSlugAlreadyExists", err)
 	}
 
@@ -137,27 +147,27 @@ func TestPostRepositoryMySQLEnforcesActiveSlugUniquenessAndAllowsReuseAfterDelet
 	if err := second.Update("Updated title", "other-slug", "updated content", domain.PostStatusDraft, categoryID); err != nil {
 		t.Fatalf("update post without changing slug: %v", err)
 	}
-	if _, err := repository.Update(second, nil); err != nil {
+	if _, err := repository.Update(context.Background(), second, nil); err != nil {
 		t.Fatalf("updating post with its existing slug should succeed: %v", err)
 	}
 
-	if err := repository.Delete(first.Data().ID); err != nil {
+	if err := repository.Delete(context.Background(), first.Data().ID); err != nil {
 		t.Fatalf("soft-delete first post: %v", err)
 	}
-	reused, err := repository.Create(newTestPost(t, userID, categoryID, "duplicate-slug"), nil)
+	reused, err := repository.Create(context.Background(), newTestPost(t, userID, categoryID, "duplicate-slug"), nil)
 	if err != nil {
 		t.Fatalf("reuse slug after deleting previous post: %v", err)
 	}
-	if err := repository.Delete(reused.Data().ID); err != nil {
+	if err := repository.Delete(context.Background(), reused.Data().ID); err != nil {
 		t.Fatalf("soft-delete reused post: %v", err)
 	}
-	if _, err := repository.Create(newTestPost(t, userID, categoryID, "duplicate-slug"), nil); err != nil {
+	if _, err := repository.Create(context.Background(), newTestPost(t, userID, categoryID, "duplicate-slug"), nil); err != nil {
 		t.Fatalf("multiple deleted posts may retain the same slug: %v", err)
 	}
 }
 
 func TestPostRepositoryMySQLConcurrentCreatesOnlyAllowOneActiveSlug(t *testing.T) {
-	db, userID, categoryID := newPostSlugMySQLTestDB(t, false)
+	db, userID, categoryID := newPostSlugMySQLTestDB(t)
 	repository := &PostRepository{db: db}
 
 	const attempts = 2
@@ -167,7 +177,7 @@ func TestPostRepositoryMySQLConcurrentCreatesOnlyAllowOneActiveSlug(t *testing.T
 		waitGroup.Add(1)
 		go func() {
 			defer waitGroup.Done()
-			_, err := repository.Create(newTestPost(t, userID, categoryID, "concurrent-slug"), nil)
+			_, err := repository.Create(context.Background(), newTestPost(t, userID, categoryID, "concurrent-slug"), nil)
 			errorsFound <- err
 		}()
 	}
@@ -190,38 +200,80 @@ func TestPostRepositoryMySQLConcurrentCreatesOnlyAllowOneActiveSlug(t *testing.T
 	}
 }
 
-func TestMigrateActivePostSlugIndexFailsWithLegacyDuplicatesAndCanRetry(t *testing.T) {
-	db, userID, categoryID := newPostSlugMySQLTestDB(t, true)
-	for _, title := range []string{"First", "Second"} {
-		post := PostModel{
-			Title: title, Slug: "legacy-duplicate", Status: "draft",
-			AuthorID: userID, CategoryID: categoryID,
-		}
-		if err := db.Create(&post).Error; err != nil {
-			t.Fatalf("insert legacy duplicate post: %v", err)
-		}
+func TestPostRepositoryMySQLPublishIfDueOnlyOneConcurrentCallerWins(t *testing.T) {
+	db, userID, categoryID := newPostSlugMySQLTestDB(t)
+	repository := &PostRepository{db: db}
+
+	scheduledAt := time.Now().Add(-time.Minute).Truncate(time.Second)
+	model := PostModel{
+		Title: "Due", Slug: "due-post", Status: string(domain.PostStatusScheduled),
+		AuthorID: userID, CategoryID: categoryID, ScheduledAt: &scheduledAt,
+	}
+	if err := db.Create(&model).Error; err != nil {
+		t.Fatalf("create scheduled post: %v", err)
 	}
 
-	if err := MigrateActivePostSlugIndex(db); err == nil {
-		t.Fatal("migration should fail rather than accept duplicate active slugs")
+	const callers = 8
+	results := make(chan bool, callers)
+	failures := make(chan error, callers)
+	var waitGroup sync.WaitGroup
+	for i := 0; i < callers; i++ {
+		waitGroup.Add(1)
+		go func() {
+			defer waitGroup.Done()
+			won, err := repository.PublishIfDue(context.Background(), model.ID, time.Now())
+			if err != nil {
+				failures <- err
+				return
+			}
+			results <- won
+		}()
 	}
-	var duplicateIDs []uint
-	if err := db.Model(&PostModel{}).Where("slug = ?", "legacy-duplicate").Pluck("id", &duplicateIDs).Error; err != nil {
-		t.Fatalf("query legacy duplicates: %v", err)
+	waitGroup.Wait()
+	close(results)
+	close(failures)
+
+	for err := range failures {
+		t.Fatalf("PublishIfDue returned error: %v", err)
 	}
-	if len(duplicateIDs) != 2 {
-		t.Fatalf("expected migration failure to preserve both legacy rows, got IDs %v", duplicateIDs)
+	winners := 0
+	for won := range results {
+		if won {
+			winners++
+		}
 	}
-	if err := db.Delete(&PostModel{}, duplicateIDs[1]).Error; err != nil {
-		t.Fatalf("resolve legacy duplicate: %v", err)
+	if winners != 1 {
+		t.Fatalf("winners = %d, want exactly 1", winners)
 	}
-	if err := MigrateActivePostSlugIndex(db); err != nil {
-		t.Fatalf("migration should succeed after resolving duplicates: %v", err)
+
+	var stored PostModel
+	if err := db.First(&stored, model.ID).Error; err != nil {
+		t.Fatalf("reload post: %v", err)
 	}
-	if !db.Migrator().HasIndex(&PostModel{}, "idx_posts_active_slug") {
-		t.Fatal("migration did not create the active slug unique index")
+	if stored.Status != string(domain.PostStatusPublished) || stored.ScheduledAt != nil {
+		t.Fatalf("stored status=%q scheduled_at=%v, want published with no schedule", stored.Status, stored.ScheduledAt)
 	}
-	if db.Migrator().HasIndex(&PostModel{}, "idx_posts_slug_deleted") {
-		t.Fatal("migration did not remove the legacy composite index")
+	if stored.PublishedAt == nil || !stored.PublishedAt.Equal(scheduledAt) {
+		t.Fatalf("published_at = %v, want the original scheduled time %v", stored.PublishedAt, scheduledAt)
+	}
+}
+
+func TestPostRepositoryMySQLPublishIfDueSkipsPostsThatAreNotDue(t *testing.T) {
+	db, userID, categoryID := newPostSlugMySQLTestDB(t)
+	repository := &PostRepository{db: db}
+
+	future := time.Now().Add(time.Hour).Truncate(time.Second)
+	posts := []PostModel{
+		{Title: "Future", Slug: "future-post", Status: string(domain.PostStatusScheduled), AuthorID: userID, CategoryID: categoryID, ScheduledAt: &future},
+		{Title: "Draft", Slug: "draft-post", Status: string(domain.PostStatusDraft), AuthorID: userID, CategoryID: categoryID},
+	}
+	for i := range posts {
+		if err := db.Create(&posts[i]).Error; err != nil {
+			t.Fatalf("create post %q: %v", posts[i].Title, err)
+		}
+		won, err := repository.PublishIfDue(context.Background(), posts[i].ID, time.Now())
+		if err != nil || won {
+			t.Fatalf("PublishIfDue(%q) = %v, %v; want false, nil", posts[i].Title, won, err)
+		}
 	}
 }

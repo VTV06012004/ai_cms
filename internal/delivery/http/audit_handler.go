@@ -16,7 +16,7 @@ func NewAuditHandler(uc *usecase.AuditUseCase) *AuditHandler {
 }
 
 func (h *AuditHandler) GetAuditLogs(c *gin.Context) {
-	logs, info, err := h.useCase.GetAllAuditLogs(parsePage(c))
+	logs, info, err := h.useCase.GetAllAuditLogs(c.Request.Context(), parsePage(c))
 	if err != nil {
 		writeError(c, err)
 		return
