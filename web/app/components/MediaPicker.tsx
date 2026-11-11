@@ -1,8 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import axios from 'axios';
-import { apiUrl } from '@/lib/api';
+import { apiClient, apiUrl, mediaUrl } from '@/lib/api';
 
 export interface MediaItem {
   name: string;
@@ -27,7 +26,7 @@ export default function MediaPicker({ onSelect, onClose }: Props) {
     setLoading(true);
     setError('');
     try {
-      const res = await axios.get(apiUrl('media'), { params: { page: nextPage, per_page: 24 } });
+      const res = await apiClient.get(apiUrl('media'), { params: { page: nextPage, per_page: 24 } });
       setItems((prev: MediaItem[]) => (nextPage === 1 ? res.data.data : [...prev, ...res.data.data]));
       setTotalPages(res.data.pagination?.total_pages ?? 0);
       setPage(nextPage);
@@ -39,6 +38,8 @@ export default function MediaPicker({ onSelect, onClose }: Props) {
   }, []);
 
   useEffect(() => {
+    // Tải dữ liệu khi vào trang; load() đặt trạng thái loading đồng bộ.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load(1);
   }, [load]);
 
@@ -59,11 +60,11 @@ export default function MediaPicker({ onSelect, onClose }: Props) {
               <button
                 key={item.name}
                 type="button"
-                onClick={() => onSelect(item.url)}
+                onClick={() => onSelect(mediaUrl(item.url))}
                 className="border rounded overflow-hidden hover:ring-2 hover:ring-blue-500 cursor-pointer bg-gray-50"
                 title={item.name}
               >
-                <img src={item.url} alt={item.name} className="h-28 w-full object-cover" />
+                <img src={mediaUrl(item.url)} alt={item.name} className="h-28 w-full object-cover" />
               </button>
             ))}
           </div>

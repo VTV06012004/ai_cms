@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import axios from 'axios';
-import { apiUrl } from '@/lib/api';
+import { isAxiosError } from 'axios';
+import { apiClient, apiUrl } from '@/lib/api';
+import { readSession } from '@/lib/session';
 
 interface Category {
   id: number;
@@ -37,7 +38,7 @@ type Notice = { type: 'ok' | 'error'; text: string } | null;
 type Tab = 'categories' | 'tags' | 'menus';
 
 function errorMessage(err: unknown): string {
-  if (axios.isAxiosError(err)) {
+  if (isAxiosError(err)) {
     return err.response?.data?.error || 'Thao tác thất bại';
   }
   return 'Thao tác thất bại';
@@ -84,7 +85,7 @@ function CategoriesPanel() {
 
   const load = useCallback(async () => {
     try {
-      const res = await axios.get(apiUrl('categories'));
+      const res = await apiClient.get(apiUrl('categories'));
       setItems(res.data.data || []);
     } catch (err) {
       setNotice({ type: 'error', text: errorMessage(err) });
@@ -94,6 +95,8 @@ function CategoriesPanel() {
   }, []);
 
   useEffect(() => {
+    // Tải dữ liệu khi vào trang; load() đặt trạng thái loading đồng bộ.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
 
@@ -125,10 +128,10 @@ function CategoriesPanel() {
     };
     try {
       if (editingId === null) {
-        await axios.post(apiUrl('categories'), payload);
+        await apiClient.post(apiUrl('categories'), payload);
         setNotice({ type: 'ok', text: 'Đã tạo danh mục' });
       } else {
-        await axios.put(apiUrl(`categories/${editingId}`), payload);
+        await apiClient.put(apiUrl(`categories/${editingId}`), payload);
         setNotice({ type: 'ok', text: 'Đã cập nhật danh mục' });
       }
       resetForm();
@@ -141,7 +144,7 @@ function CategoriesPanel() {
   const remove = async (item: Category) => {
     if (!confirm(`Xóa danh mục "${item.name}"?`)) return;
     try {
-      await axios.delete(apiUrl(`categories/${item.id}`));
+      await apiClient.delete(apiUrl(`categories/${item.id}`));
       setNotice({ type: 'ok', text: 'Đã xóa danh mục' });
       if (editingId === item.id) resetForm();
       await load();
@@ -268,7 +271,7 @@ function TagsPanel() {
 
   const load = useCallback(async () => {
     try {
-      const res = await axios.get(apiUrl('tags'));
+      const res = await apiClient.get(apiUrl('tags'));
       setItems(res.data.data || []);
     } catch (err) {
       setNotice({ type: 'error', text: errorMessage(err) });
@@ -278,6 +281,8 @@ function TagsPanel() {
   }, []);
 
   useEffect(() => {
+    // Tải dữ liệu khi vào trang; load() đặt trạng thái loading đồng bộ.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
 
@@ -292,10 +297,10 @@ function TagsPanel() {
     e.preventDefault();
     try {
       if (editingId === null) {
-        await axios.post(apiUrl('tags'), { name, slug });
+        await apiClient.post(apiUrl('tags'), { name, slug });
         setNotice({ type: 'ok', text: 'Đã tạo thẻ' });
       } else {
-        await axios.put(apiUrl(`tags/${editingId}`), { name, slug });
+        await apiClient.put(apiUrl(`tags/${editingId}`), { name, slug });
         setNotice({ type: 'ok', text: 'Đã cập nhật thẻ' });
       }
       resetForm();
@@ -308,7 +313,7 @@ function TagsPanel() {
   const remove = async (item: Tag) => {
     if (!confirm(`Xóa thẻ "${item.name}"? Thẻ sẽ được gỡ khỏi các bài viết đang dùng.`)) return;
     try {
-      await axios.delete(apiUrl(`tags/${item.id}`));
+      await apiClient.delete(apiUrl(`tags/${item.id}`));
       setNotice({ type: 'ok', text: 'Đã xóa thẻ' });
       if (editingId === item.id) resetForm();
       await load();
@@ -399,8 +404,8 @@ function MenusPanel() {
   const load = useCallback(async () => {
     try {
       const [menuRes, catRes] = await Promise.all([
-        axios.get(apiUrl('menus')),
-        axios.get(apiUrl('categories')),
+        apiClient.get(apiUrl('menus')),
+        apiClient.get(apiUrl('categories')),
       ]);
       setMenus(menuRes.data.data || []);
       setCategories(catRes.data.data || []);
@@ -412,6 +417,8 @@ function MenusPanel() {
   }, []);
 
   useEffect(() => {
+    // Tải dữ liệu khi vào trang; load() đặt trạng thái loading đồng bộ.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
 
@@ -465,10 +472,10 @@ function MenusPanel() {
     };
     try {
       if (editingId === null) {
-        await axios.post(apiUrl('menus'), payload);
+        await apiClient.post(apiUrl('menus'), payload);
         setNotice({ type: 'ok', text: 'Đã tạo menu' });
       } else {
-        await axios.put(apiUrl(`menus/${editingId}`), payload);
+        await apiClient.put(apiUrl(`menus/${editingId}`), payload);
         setNotice({ type: 'ok', text: 'Đã cập nhật menu' });
       }
       resetForm();
@@ -481,7 +488,7 @@ function MenusPanel() {
   const remove = async (menu: Menu) => {
     if (!confirm(`Xóa menu "${menu.name}"?`)) return;
     try {
-      await axios.delete(apiUrl(`menus/${menu.id}`));
+      await apiClient.delete(apiUrl(`menus/${menu.id}`));
       setNotice({ type: 'ok', text: 'Đã xóa menu' });
       if (editingId === menu.id) resetForm();
       await load();
@@ -638,13 +645,14 @@ export default function CatalogAdminPage() {
   const [tab, setTab] = useState<Tab>('categories');
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const storedRole = (localStorage.getItem('userRole') || '').toLowerCase();
-    if (!token || (storedRole !== 'admin' && storedRole !== 'editor')) {
+    const { signedIn, role: storedRole } = readSession();
+    if (!signedIn || (storedRole !== 'admin' && storedRole !== 'editor')) {
       alert('Bạn không có quyền truy cập trang này!');
       router.push('/posts');
       return;
     }
+    // Chỉ chạy một lần sau khi mount: đọc phiên từ localStorage rồi chặn/chuyển hướng.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRole(storedRole);
   }, [router]);
 

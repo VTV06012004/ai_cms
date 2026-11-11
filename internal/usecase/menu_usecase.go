@@ -1,9 +1,10 @@
 package usecase
 
 import (
+	"context"
 	"fmt"
 
-	"api/internal/domain"
+	"github.com/VTV06012004/ai_cms/internal/domain"
 )
 
 type MenuUseCase struct {
@@ -30,18 +31,18 @@ type MenuInputDTO struct {
 	MenuItems []MenuItemInputDTO
 }
 
-func (uc *MenuUseCase) GetAllMenus() ([]domain.Menu, error) {
-	return uc.menuRepo.GetAll()
+func (uc *MenuUseCase) GetAllMenus(ctx context.Context) ([]domain.Menu, error) {
+	return uc.menuRepo.GetAll(ctx)
 }
 
 // buildItems chuyển dữ liệu nhập thành các mục menu; mục loại "category" tự lấy URL (và tên nếu để trống) từ danh mục.
-func (uc *MenuUseCase) buildItems(inputs []MenuItemInputDTO) ([]domain.MenuItem, error) {
+func (uc *MenuUseCase) buildItems(ctx context.Context, inputs []MenuItemInputDTO) ([]domain.MenuItem, error) {
 	items := make([]domain.MenuItem, 0, len(inputs))
 	for _, itemInput := range inputs {
 		url := itemInput.URL
 		title := itemInput.Title
 		if itemInput.Type == "category" && itemInput.TargetID > 0 {
-			if category, err := uc.categoryRepo.GetByID(itemInput.TargetID); err == nil {
+			if category, err := uc.categoryRepo.GetByID(ctx, itemInput.TargetID); err == nil {
 				categoryData := category.Data()
 				if title == "" {
 					title = categoryData.Name
@@ -58,12 +59,12 @@ func (uc *MenuUseCase) buildItems(inputs []MenuItemInputDTO) ([]domain.MenuItem,
 	return items, nil
 }
 
-func (uc *MenuUseCase) CreateMenu(userID uint, input MenuInputDTO, ipAddress string) (*domain.Menu, error) {
+func (uc *MenuUseCase) CreateMenu(ctx context.Context, userID uint, input MenuInputDTO, ipAddress string) (*domain.Menu, error) {
 	menu, err := domain.NewMenu(input.Name, input.Location)
 	if err != nil {
 		return nil, err
 	}
-	items, err := uc.buildItems(input.MenuItems)
+	items, err := uc.buildItems(ctx, input.MenuItems)
 	if err != nil {
 		return nil, err
 	}
@@ -71,16 +72,16 @@ func (uc *MenuUseCase) CreateMenu(userID uint, input MenuInputDTO, ipAddress str
 		menu.AddItem(item)
 	}
 	var created *domain.Menu
-	err = uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
-		saved, err := repositories.Menus.Create(menu)
+	err = uc.unitOfWork.WithinTransaction(ctx, func(repositories TransactionRepositories) error {
+		saved, err := repositories.Menus.Create(ctx, menu)
 		if err != nil {
 			return fmt.Errorf("không thể tạo menu: %w", err)
 		}
 		data := saved.Data()
-		if err := repositories.Audits.RecordLog(userID, "CREATE_MENU", fmt.Sprintf("Menu ID: %d", data.ID), fmt.Sprintf("Đã tạo menu: '%s'", data.Name), ipAddress); err != nil {
+		if err := repositories.Audits.RecordLog(ctx, userID, "CREATE_MENU", fmt.Sprintf("Menu ID: %d", data.ID), fmt.Sprintf("Đã tạo menu: '%s'", data.Name), ipAddress); err != nil {
 			return fmt.Errorf("không thể ghi audit log: %w", err)
 		}
-		created, err = repositories.Menus.GetByID(data.ID)
+		created, err = repositories.Menus.GetByID(ctx, data.ID)
 		return err
 	})
 	if err != nil {
@@ -89,14 +90,14 @@ func (uc *MenuUseCase) CreateMenu(userID uint, input MenuInputDTO, ipAddress str
 	return created, nil
 }
 
-func (uc *MenuUseCase) UpdateMenu(userID, menuID uint, input MenuInputDTO, ipAddress string) (*domain.Menu, error) {
-	items, err := uc.buildItems(input.MenuItems)
+func (uc *MenuUseCase) UpdateMenu(ctx context.Context, userID, menuID uint, input MenuInputDTO, ipAddress string) (*domain.Menu, error) {
+	items, err := uc.buildItems(ctx, input.MenuItems)
 	if err != nil {
 		return nil, err
 	}
 	var updated *domain.Menu
-	err = uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
-		menu, err := repositories.Menus.GetByID(menuID)
+	err = uc.unitOfWork.WithinTransaction(ctx, func(repositories TransactionRepositories) error {
+		menu, err := repositories.Menus.GetByID(ctx, menuID)
 		if err != nil {
 			return err
 		}
@@ -104,12 +105,12 @@ func (uc *MenuUseCase) UpdateMenu(userID, menuID uint, input MenuInputDTO, ipAdd
 			return err
 		}
 		menu.ReplaceItems(items)
-		saved, err := repositories.Menus.Update(menu)
+		saved, err := repositories.Menus.Update(ctx, menu)
 		if err != nil {
 			return fmt.Errorf("không thể cập nhật menu: %w", err)
 		}
 		updated = saved
-		return recordCatalogAudit(repositories, userID, "UPDATE_MENU",
+		return recordCatalogAudit(ctx, repositories, userID, "UPDATE_MENU",
 			fmt.Sprintf("Menu ID: %d", menuID), fmt.Sprintf("Đã cập nhật menu: '%s'", saved.Data().Name), ipAddress)
 	})
 	if err != nil {
@@ -118,16 +119,16 @@ func (uc *MenuUseCase) UpdateMenu(userID, menuID uint, input MenuInputDTO, ipAdd
 	return updated, nil
 }
 
-func (uc *MenuUseCase) DeleteMenu(userID, menuID uint, ipAddress string) error {
-	return uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
-		menu, err := repositories.Menus.GetByID(menuID)
+func (uc *MenuUseCase) DeleteMenu(ctx context.Context, userID, menuID uint, ipAddress string) error {
+	return uc.unitOfWork.WithinTransaction(ctx, func(repositories TransactionRepositories) error {
+		menu, err := repositories.Menus.GetByID(ctx, menuID)
 		if err != nil {
 			return err
 		}
 		menuData := menu.Data()
-		if err := repositories.Menus.Delete(menuID); err != nil {
+		if err := repositories.Menus.Delete(ctx, menuID); err != nil {
 			return fmt.Errorf("không thể xóa menu: %w", err)
 		}
-		return repositories.Audits.RecordLog(userID, "DELETE_MENU", fmt.Sprintf("Menu ID: %d", menuID), fmt.Sprintf("Đã xóa menu: '%s'", menuData.Name), ipAddress)
+		return repositories.Audits.RecordLog(ctx, userID, "DELETE_MENU", fmt.Sprintf("Menu ID: %d", menuID), fmt.Sprintf("Đã xóa menu: '%s'", menuData.Name), ipAddress)
 	})
 }

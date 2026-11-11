@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"api/internal/infrastructure/security"
+	"github.com/VTV06012004/ai_cms/internal/infrastructure/security"
 
 	"github.com/gin-gonic/gin"
 )

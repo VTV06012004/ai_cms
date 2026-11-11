@@ -2,7 +2,7 @@ package database
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -19,6 +19,6 @@ func NewMySQLConnection(dsn string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("không thể kết nối tới database: %v", err)
 	}
 
-	log.Println(" kết nối cơ sở dữ liệu MySQL thành công!")
+	slog.Info("connected to MySQL")
 	return db, nil
 }

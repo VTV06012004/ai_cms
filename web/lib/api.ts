@@ -1,4 +1,6 @@
-import axios, { type AxiosInstance } from "axios";
+import axios, { isAxiosError, type AxiosInstance } from "axios";
+import { clearAllDrafts } from "./draft";
+import { notifySessionChanged } from "./session";
 
 const defaultApiBaseUrl = "http://localhost:8081/api";
 
@@ -19,6 +21,23 @@ export function mediaUrl(path: string): string {
   return new URL(path, `${apiOrigin}/`).toString();
 }
 
+type ErrorBody = { error?: unknown; message?: unknown };
+
+// Message the API put in an error response, or the fallback for anything else.
+export function apiErrorMessage(err: unknown, fallback: string): string {
+  if (isAxiosError(err)) {
+    const body = err.response?.data as ErrorBody | undefined;
+    for (const value of [body?.error, body?.message]) {
+      if (typeof value === "string" && value !== "") return value;
+    }
+  }
+  return fallback;
+}
+
+export function apiErrorStatus(err: unknown): number | undefined {
+  return isAxiosError(err) ? err.response?.status : undefined;
+}
+
 const SESSION_KEYS = ["token", "userRole", "userId", "userName", "userEmail"];
 const LOGIN_PATH = "/login";
 
@@ -36,6 +55,7 @@ export function clearSession(): void {
   } catch {
     // Storage can be unavailable (private mode); nothing to clear then.
   }
+  notifySessionChanged();
 }
 
 function isApiRequest(url?: string): boolean {
@@ -57,6 +77,8 @@ function hasRealBearerToken(value: unknown): boolean {
 type SessionOptions = {
   getToken: () => string | null;
   onSessionExpired: () => void;
+  refreshAccessToken?: () => Promise<string>;
+  setToken?: (token: string) => void;
 };
 
 /**
@@ -68,6 +90,8 @@ export function installSessionHandling(
   client: AxiosInstance,
   options: SessionOptions,
 ): () => void {
+  let refreshPromise: Promise<string> | null = null;
+  let sessionExpired = false;
   const requestId = client.interceptors.request.use((config) => {
     if (!isApiRequest(config.url) || isAuthEndpoint(config.url)) {
       return config;
@@ -83,16 +107,41 @@ export function installSessionHandling(
 
   const responseId = client.interceptors.response.use(
     (response) => response,
-    (error) => {
-      const config = error?.config;
+    async (error: unknown) => {
+      if (!axios.isAxiosError(error)) {
+        return Promise.reject(error);
+      }
+      const config = error.config;
       if (
-        error?.response?.status === 401 &&
+        error.response?.status === 401 &&
         config &&
         isApiRequest(config.url) &&
         !isAuthEndpoint(config.url) &&
-        hasRealBearerToken(config.headers?.get?.("Authorization"))
+        hasRealBearerToken(config.headers.get("Authorization"))
       ) {
-        options.onSessionExpired();
+        const retryConfig = config as typeof config & { _sessionRetry?: boolean };
+        if (retryConfig._sessionRetry || !options.refreshAccessToken) {
+          options.onSessionExpired();
+          return Promise.reject(error);
+        }
+
+        retryConfig._sessionRetry = true;
+        refreshPromise ??= options.refreshAccessToken().finally(() => {
+          refreshPromise = null;
+        });
+        try {
+          const token = await refreshPromise;
+          sessionExpired = false;
+          options.setToken?.(token);
+          retryConfig.headers.set("Authorization", `Bearer ${token}`);
+          return client.request(retryConfig);
+        } catch {
+          if (!sessionExpired) {
+            sessionExpired = true;
+            options.onSessionExpired();
+          }
+          return Promise.reject(error);
+        }
       }
       return Promise.reject(error);
     },
@@ -111,16 +160,56 @@ function signOutAndRedirect(): void {
   }
 }
 
-// Every page imports this module, so the shared axios instance gets the same
-// behaviour everywhere: token attached automatically, sign out on 401.
-if (typeof window !== "undefined") {
-  const globalFlag = "__cmsSessionHandlingInstalled";
-  const target = window as unknown as Record<string, unknown>;
-  if (!target[globalFlag]) {
-    target[globalFlag] = true;
-    installSessionHandling(axios, {
-      getToken,
-      onSessionExpired: signOutAndRedirect,
-    });
+// One axios instance for the whole app. Token attachment and sign-out on 401
+// are installed on this instance only, so pages must call apiClient and not
+// the global axios.
+export const apiClient = axios.create({ withCredentials: true });
+
+const refreshClient = axios.create({ withCredentials: true });
+
+async function refreshAccessToken(): Promise<string> {
+  const response = await refreshClient.post(apiUrl('auth/refresh'));
+  const token: unknown = response.data?.token;
+  if (typeof token !== 'string' || token === '') {
+    throw new Error('Refresh endpoint returned no access token');
+  }
+  const user: unknown = response.data?.user;
+  if (typeof user === 'object' && user !== null) {
+    const refreshedUser = user as Record<string, unknown>;
+    if (typeof refreshedUser.role === 'string') {
+      localStorage.setItem('userRole', refreshedUser.role);
+    }
+    if (typeof refreshedUser.name === 'string') {
+      localStorage.setItem('userName', refreshedUser.name);
+    }
+    if (typeof refreshedUser.email === 'string') {
+      localStorage.setItem('userEmail', refreshedUser.email);
+    }
+    if (typeof refreshedUser.id === 'number') {
+      localStorage.setItem('userId', String(refreshedUser.id));
+    }
+  }
+  return token;
+}
+
+export async function logout(): Promise<void> {
+  try {
+    await apiClient.post(apiUrl('auth/logout'));
+  } catch (error) {
+    console.error('Không thể thu hồi phiên đăng nhập trên máy chủ:', error);
+  } finally {
+    clearSession();
+    // Đăng xuất chủ động mới xóa bản nháp; phiên hết hạn (401) thì giữ lại để khôi phục.
+    clearAllDrafts();
   }
 }
+
+installSessionHandling(apiClient, {
+  getToken,
+  onSessionExpired: signOutAndRedirect,
+  refreshAccessToken,
+  setToken: (token) => {
+    localStorage.setItem('token', token);
+    notifySessionChanged();
+  },
+});

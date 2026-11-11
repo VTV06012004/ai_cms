@@ -1,6 +1,9 @@
 package usecase
 
-import "api/internal/domain"
+import (
+	"context"
+	"github.com/VTV06012004/ai_cms/internal/domain"
+)
 
 type TransactionRepositories struct {
 	Users      domain.UserRepository
@@ -13,5 +16,5 @@ type TransactionRepositories struct {
 }
 
 type UnitOfWork interface {
-	WithinTransaction(func(TransactionRepositories) error) error
+	WithinTransaction(context.Context, func(TransactionRepositories) error) error
 }

@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import axios from 'axios';
-import { apiUrl } from '@/lib/api';
+import { apiClient, apiErrorMessage, apiUrl, mediaUrl } from '@/lib/api';
+import { useSession } from '@/lib/session';
 import type { MediaItem } from '@/app/components/MediaPicker';
 
 export default function MediaLibraryPage() {
@@ -14,7 +14,7 @@ export default function MediaLibraryPage() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
-  const [userRole, setUserRole] = useState('author');
+  const userRole = useSession().role;
 
   const canDelete = userRole === 'admin' || userRole === 'editor';
 
@@ -22,7 +22,7 @@ export default function MediaLibraryPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await axios.get(apiUrl('media'), { params: { page: nextPage, per_page: 24 } });
+      const res = await apiClient.get(apiUrl('media'), { params: { page: nextPage, per_page: 24 } });
       setItems((prev: MediaItem[]) => (nextPage === 1 ? res.data.data : [...prev, ...res.data.data]));
       setTotalPages(res.data.pagination?.total_pages ?? 0);
       setTotal(res.data.pagination?.total ?? 0);
@@ -35,7 +35,8 @@ export default function MediaLibraryPage() {
   }, []);
 
   useEffect(() => {
-    setUserRole((localStorage.getItem('userRole') || 'author').toLowerCase());
+    // Tải dữ liệu khi vào trang; load() đặt trạng thái loading đồng bộ.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load(1);
   }, [load]);
 
@@ -46,11 +47,10 @@ export default function MediaLibraryPage() {
     formData.append('file', file);
     setUploading(true);
     try {
-      await axios.post(apiUrl('upload'), formData);
+      await apiClient.post(apiUrl('upload'), formData);
       await load(1);
     } catch (err) {
-      const message = axios.isAxiosError(err) ? err.response?.data?.error : undefined;
-      alert(message || 'Upload ảnh thất bại!');
+      alert(apiErrorMessage(err, 'Upload ảnh thất bại!'));
     } finally {
       setUploading(false);
       e.target.value = '';
@@ -60,12 +60,11 @@ export default function MediaLibraryPage() {
   const handleDelete = async (item: MediaItem) => {
     if (!confirm(`Xóa ảnh ${item.name}? Các bài viết đang dùng ảnh này sẽ bị mất ảnh.`)) return;
     try {
-      await axios.delete(apiUrl(`media/${encodeURIComponent(item.name)}`));
+      await apiClient.delete(apiUrl(`media/${encodeURIComponent(item.name)}`));
       setItems((prev: MediaItem[]) => prev.filter((i) => i.name !== item.name));
       setTotal((n) => Math.max(0, n - 1));
     } catch (err) {
-      const message = axios.isAxiosError(err) ? err.response?.data?.error : undefined;
-      alert(message || 'Xóa ảnh thất bại!');
+      alert(apiErrorMessage(err, 'Xóa ảnh thất bại!'));
     }
   };
 
@@ -102,7 +101,7 @@ export default function MediaLibraryPage() {
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
         {items.map((item) => (
           <div key={item.name} className="border rounded-lg overflow-hidden bg-white shadow-sm">
-            <img src={item.url} alt={item.name} className="h-36 w-full object-cover bg-gray-100" />
+            <img src={mediaUrl(item.url)} alt={item.name} className="h-36 w-full object-cover bg-gray-100" />
             <div className="p-2 space-y-1">
               <p className="text-xs text-gray-700 truncate" title={item.name}>{item.name}</p>
               <p className="text-[11px] text-gray-400">
@@ -111,7 +110,7 @@ export default function MediaLibraryPage() {
               <div className="flex gap-2 pt-1">
                 <button
                   type="button"
-                  onClick={() => copyUrl(item.url)}
+                  onClick={() => copyUrl(mediaUrl(item.url))}
                   className="flex-1 text-xs px-2 py-1 bg-blue-50 text-blue-600 border border-blue-200 rounded hover:bg-blue-100 cursor-pointer"
                 >
                   Sao chép link

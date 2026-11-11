@@ -1,19 +1,18 @@
 package http
 
 import (
-	"errors"
+	"context"
 	"net/http"
-	"strconv"
 
-	"api/internal/domain"
+	"github.com/VTV06012004/ai_cms/internal/domain"
 
 	"github.com/gin-gonic/gin"
 )
 
 type revisionUseCase interface {
-	GetByPostID(postID, userID uint, userRole string) ([]domain.Revision, error)
-	RestoreRevision(revisionID, userID uint, userRole, ipAddress string) (*domain.Post, error)
-	CompareRevisions(fromID, toID, userID uint, userRole string) (*domain.RevisionComparison, error)
+	GetByPostID(context.Context, uint, uint, string) ([]domain.Revision, error)
+	RestoreRevision(context.Context, uint, uint, string, string) (*domain.Post, error)
+	CompareRevisions(context.Context, uint, uint, uint, string) (*domain.RevisionComparison, error)
 }
 
 type RevisionHandler struct {
@@ -25,35 +24,27 @@ func NewRevisionHandler(uc revisionUseCase) *RevisionHandler {
 }
 
 func (h *RevisionHandler) GetByPostID(c *gin.Context) {
-	postID, err := strconv.ParseUint(c.Param("postId"), 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID bài viết không hợp lệ"})
+	postID, ok := parseIDParam(c, "postId")
+	if !ok {
 		return
 	}
 
 	userIDValue, exists := c.Get("user_id")
 	userID, validUserID := userIDValue.(uint)
 	if !exists || !validUserID {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Không tìm thấy thông tin người dùng"})
+		writeError(c, errMissingUserIdentity)
 		return
 	}
 	roleValue, exists := c.Get("user_role")
 	userRole, validRole := roleValue.(string)
 	if !exists || !validRole {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Không tìm thấy thông tin phân quyền"})
+		writeError(c, errMissingRoleIdentity)
 		return
 	}
 
-	revisions, err := h.useCase.GetByPostID(uint(postID), userID, userRole)
+	revisions, err := h.useCase.GetByPostID(c.Request.Context(), postID, userID, userRole)
 	if err != nil {
-		switch {
-		case errors.Is(err, domain.ErrPostNotFound):
-			c.JSON(http.StatusNotFound, gin.H{"error": "Không tìm thấy bài viết"})
-		case errors.Is(err, domain.ErrPostAccessDenied):
-			c.JSON(http.StatusForbidden, gin.H{"error": "Bạn không có quyền xem lịch sử bài viết này"})
-		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể tải lịch sử bài viết"})
-		}
+		writeError(c, err)
 		return
 	}
 	responses := make([]revisionResponse, 0, len(revisions))
@@ -64,9 +55,8 @@ func (h *RevisionHandler) GetByPostID(c *gin.Context) {
 }
 
 func (h *RevisionHandler) Restore(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID revision không hợp lệ"})
+	id, ok := parseIDParam(c, "id")
+	if !ok {
 		return
 	}
 
@@ -75,7 +65,7 @@ func (h *RevisionHandler) Restore(c *gin.Context) {
 	roleValue, _ := c.Get("user_role")
 	role, _ := roleValue.(string)
 
-	post, err := h.useCase.RestoreRevision(uint(id), userID, role, c.ClientIP())
+	post, err := h.useCase.RestoreRevision(c.Request.Context(), id, userID, role, c.ClientIP())
 	if err != nil {
 		writeError(c, err)
 		return
@@ -84,16 +74,16 @@ func (h *RevisionHandler) Restore(c *gin.Context) {
 }
 
 func (h *RevisionHandler) Compare(c *gin.Context) {
-	fromID, err := strconv.ParseUint(c.Query("from"), 10, 32)
-	if err != nil || fromID == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "ID phiên bản gốc không hợp lệ"})
+	fromID, err := parseIDValue(c.Query("from"))
+	if err != nil {
+		writeError(c, err)
 		return
 	}
-	var toID uint64
+	var toID uint
 	if to := c.Query("to"); to != "" && to != "current" {
-		toID, err = strconv.ParseUint(to, 10, 32)
-		if err != nil || toID == 0 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "ID phiên bản so sánh không hợp lệ"})
+		toID, err = parseIDValue(to)
+		if err != nil {
+			writeError(c, err)
 			return
 		}
 	}
@@ -103,7 +93,7 @@ func (h *RevisionHandler) Compare(c *gin.Context) {
 	roleValue, _ := c.Get("user_role")
 	role, _ := roleValue.(string)
 
-	comparison, err := h.useCase.CompareRevisions(uint(fromID), uint(toID), userID, role)
+	comparison, err := h.useCase.CompareRevisions(c.Request.Context(), fromID, toID, userID, role)
 	if err != nil {
 		writeError(c, err)
 		return

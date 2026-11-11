@@ -1,7 +1,8 @@
 package persistence
 
 import (
-	"api/internal/usecase"
+	"context"
+	"github.com/VTV06012004/ai_cms/internal/usecase"
 
 	"gorm.io/gorm"
 )
@@ -14,8 +15,8 @@ func NewUnitOfWork(db *gorm.DB) *GormUnitOfWork {
 	return &GormUnitOfWork{db: db}
 }
 
-func (u *GormUnitOfWork) WithinTransaction(work func(usecase.TransactionRepositories) error) error {
-	return u.db.Transaction(func(tx *gorm.DB) error {
+func (u *GormUnitOfWork) WithinTransaction(ctx context.Context, work func(usecase.TransactionRepositories) error) error {
+	return u.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		repositories := usecase.TransactionRepositories{
 			Users:      NewUserRepository(tx),
 			Posts:      NewPostRepository(tx),

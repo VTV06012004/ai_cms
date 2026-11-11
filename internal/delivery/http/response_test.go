@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"api/internal/domain"
+	"github.com/VTV06012004/ai_cms/internal/domain"
 )
 
 func TestUserResponseKeepsAPIShapeAndOmitsPasswordHash(t *testing.T) {

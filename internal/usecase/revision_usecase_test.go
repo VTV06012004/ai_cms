@@ -1,8 +1,9 @@
 package usecase
 
 import (
-	"api/internal/domain"
+	"context"
 	"errors"
+	"github.com/VTV06012004/ai_cms/internal/domain"
 	"testing"
 	"time"
 )
@@ -12,28 +13,32 @@ type revisionPostRepositoryStub struct {
 	err  error
 }
 
-func (r revisionPostRepositoryStub) GetAll(domain.PostListCriteria, domain.PageRequest) ([]domain.Post, int64, error) {
+func (r revisionPostRepositoryStub) GetAll(context.Context, domain.PostListCriteria, domain.PageRequest) ([]domain.Post, int64, error) {
 	return nil, 0, nil
 }
 
-func (r revisionPostRepositoryStub) GetByID(uint) (*domain.Post, error) {
+func (r revisionPostRepositoryStub) GetByID(context.Context, uint) (*domain.Post, error) {
 	return r.post, r.err
 }
 
-func (revisionPostRepositoryStub) Create(*domain.Post, []uint) (*domain.Post, error) {
+func (revisionPostRepositoryStub) Create(context.Context, *domain.Post, []uint) (*domain.Post, error) {
 	return nil, nil
 }
 
-func (revisionPostRepositoryStub) Update(*domain.Post, []uint) (*domain.Post, error) {
+func (revisionPostRepositoryStub) Update(context.Context, *domain.Post, []uint) (*domain.Post, error) {
 	return nil, nil
 }
 
-func (revisionPostRepositoryStub) Delete(uint) error {
+func (revisionPostRepositoryStub) Delete(context.Context, uint) error {
 	return nil
 }
 
-func (revisionPostRepositoryStub) ListDue(time.Time, int) ([]domain.Post, error) {
+func (revisionPostRepositoryStub) ListDue(context.Context, time.Time, int) ([]domain.Post, error) {
 	return nil, nil
+}
+
+func (revisionPostRepositoryStub) PublishIfDue(context.Context, uint, time.Time) (bool, error) {
+	return false, nil
 }
 
 type revisionRepositoryStub struct {
@@ -41,16 +46,16 @@ type revisionRepositoryStub struct {
 	calls     int
 }
 
-func (r *revisionRepositoryStub) GetByPostID(uint) ([]domain.Revision, error) {
+func (r *revisionRepositoryStub) GetByPostID(context.Context, uint) ([]domain.Revision, error) {
 	r.calls++
 	return r.revisions, nil
 }
 
-func (*revisionRepositoryStub) Create(*domain.Revision) error {
+func (*revisionRepositoryStub) Create(context.Context, *domain.Revision) error {
 	return nil
 }
 
-func (*revisionRepositoryStub) GetByID(uint) (*domain.Revision, error) {
+func (*revisionRepositoryStub) GetByID(context.Context, uint) (*domain.Revision, error) {
 	return nil, nil
 }
 
@@ -74,7 +79,7 @@ func TestGetByPostIDAllowsPostOwnerAndEditors(t *testing.T) {
 			revisionRepo := &revisionRepositoryStub{revisions: revisions}
 			useCase := NewRevisionUseCase(revisionRepo, revisionPostRepositoryStub{post: post}, nil)
 
-			got, err := useCase.GetByPostID(7, test.userID, test.role)
+			got, err := useCase.GetByPostID(context.Background(), 7, test.userID, test.role)
 			if err != nil {
 				t.Fatalf("GetByPostID returned error: %v", err)
 			}
@@ -97,7 +102,7 @@ func TestGetByPostIDRejectsAuthorChangingPostID(t *testing.T) {
 	}
 	useCase := NewRevisionUseCase(revisionRepo, revisionPostRepositoryStub{post: post}, nil)
 
-	got, err := useCase.GetByPostID(7, 99, string(domain.UserRoleAuthor))
+	got, err := useCase.GetByPostID(context.Background(), 7, 99, string(domain.UserRoleAuthor))
 	if !errors.Is(err, domain.ErrPostAccessDenied) {
 		t.Fatalf("expected ErrPostAccessDenied, got %v", err)
 	}
@@ -118,7 +123,7 @@ func TestGetByPostIDKeepsDatabaseFailureDistinctFromNotFound(t *testing.T) {
 		nil,
 	)
 
-	got, err := useCase.GetByPostID(7, 99, string(domain.UserRoleAuthor))
+	got, err := useCase.GetByPostID(context.Background(), 7, 99, string(domain.UserRoleAuthor))
 	if !errors.Is(err, databaseFailure) || errors.Is(err, domain.ErrPostNotFound) {
 		t.Fatalf("expected the database failure to be returned unchanged, got %v", err)
 	}
@@ -135,7 +140,7 @@ func TestGetByPostIDReturnsNotFoundWithoutQueryingRevisions(t *testing.T) {
 		nil,
 	)
 
-	got, err := useCase.GetByPostID(7, 99, string(domain.UserRoleAuthor))
+	got, err := useCase.GetByPostID(context.Background(), 7, 99, string(domain.UserRoleAuthor))
 	if !errors.Is(err, domain.ErrPostNotFound) {
 		t.Fatalf("expected ErrPostNotFound, got %v", err)
 	}
