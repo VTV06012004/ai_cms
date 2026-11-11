@@ -63,3 +63,32 @@ func TestAuthIPRateLimitMiddlewareRejectsExcessRequests(t *testing.T) {
 		t.Fatalf("excess request status = %d, want %d", response.Code, http.StatusTooManyRequests)
 	}
 }
+
+func TestSessionRateLimitIsSeparateAndLooserThanLogin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler := NewAuthHandler(nil, nil, nil, false)
+	router := gin.New()
+	router.POST("/api/auth/login", handler.RateLimitIP(), func(c *gin.Context) { c.Status(http.StatusNoContent) })
+	router.POST("/api/auth/refresh", handler.RateLimitSession(), func(c *gin.Context) { c.Status(http.StatusNoContent) })
+
+	post := func(path string) int {
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequest(http.MethodPost, path, nil))
+		return response.Code
+	}
+
+	for i := 0; i < authRateLimit; i++ {
+		post("/api/auth/login")
+	}
+	if got := post("/api/auth/login"); got != http.StatusTooManyRequests {
+		t.Fatalf("login after the limit status = %d, want %d", got, http.StatusTooManyRequests)
+	}
+	for i := 0; i < sessionRateLimit; i++ {
+		if got := post("/api/auth/refresh"); got != http.StatusNoContent {
+			t.Fatalf("refresh %d status = %d, want %d (login limit must not apply)", i+1, got, http.StatusNoContent)
+		}
+	}
+	if got := post("/api/auth/refresh"); got != http.StatusTooManyRequests {
+		t.Fatalf("refresh after the limit status = %d, want %d", got, http.StatusTooManyRequests)
+	}
+}
