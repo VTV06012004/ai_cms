@@ -1,10 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import axios from 'axios';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { apiUrl } from '@/lib/api';
+import { apiClient, apiUrl } from '@/lib/api';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -19,7 +18,7 @@ export default function LoginPage() {
     setError('');
 
     try {
-      const response = await axios.post(apiUrl('auth/login'), {
+      const response = await apiClient.post(apiUrl('auth/login'), {
         email,
         password,
       });

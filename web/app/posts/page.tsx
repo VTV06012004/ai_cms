@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import axios from 'axios';
-import { apiUrl, mediaUrl } from '@/lib/api';
+import { apiClient, apiUrl, logout, mediaUrl } from '@/lib/api';
 interface Category {
   id: number;
   name: string;
@@ -79,11 +78,9 @@ export default function PostsPage() {
 
     const fetchData = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
         const [postsRes, catRes] = await Promise.all([
-          axios.get(apiUrl('posts'), { headers, params: { page: 1, per_page: 20 } }),
-          axios.get(apiUrl('categories'))
+          apiClient.get(apiUrl('posts'), { params: { page: 1, per_page: 20 } }),
+          apiClient.get(apiUrl('categories'))
         ]);
 
         setPosts(postsRes.data.data || []);
@@ -102,9 +99,7 @@ export default function PostsPage() {
   const handleLoadMore = async () => {
     setLoadingMore(true);
     try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get(apiUrl('posts'), {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      const res = await apiClient.get(apiUrl('posts'), {
         params: { page: page + 1, per_page: 20 },
       });
       setPosts((prev: Post[]) => [...prev, ...(res.data.data || [])]);
@@ -117,12 +112,8 @@ export default function PostsPage() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('userRole');
-    localStorage.removeItem('userId');
-    localStorage.removeItem('userName');
-    localStorage.removeItem('userEmail');
+  const handleLogout = async () => {
+    await logout();
     router.push('/login');
   };
 
@@ -131,10 +122,7 @@ export default function PostsPage() {
     if (!confirm('Bạn có chắc chắn muốn xóa bài viết này không?')) return;
 
     try {
-      const token = localStorage.getItem('token');
-      await axios.delete(apiUrl(`posts/${id}`), {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      await apiClient.delete(apiUrl(`posts/${id}`));
 
       setPosts(posts.filter((p) => p.id !== id));
     } catch (err: any) {
@@ -155,11 +143,9 @@ export default function PostsPage() {
     }
 
     try {
-      const token = localStorage.getItem('token');
-      await axios.put(
+      await apiClient.put(
         apiUrl(`posts/${postId}/moderate`),
-        { status: newStatus, rejection_reason },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { status: newStatus, rejection_reason }
       );
 
       alert(`Đã ${action === 'approve' ? 'duyệt bài viết (Published)' : 'từ chối bài viết'} thành công!`);

@@ -1,8 +1,9 @@
 package usecase
 
 import (
-	"api/internal/domain"
+	"context"
 	"errors"
+	"github.com/VTV06012004/ai_cms/internal/domain"
 	"testing"
 )
 
@@ -14,14 +15,14 @@ type permissionPostRepository struct {
 	deleted bool
 }
 
-func (r *permissionPostRepository) GetByID(id uint) (*domain.Post, error) {
+func (r *permissionPostRepository) GetByID(ctx context.Context, id uint) (*domain.Post, error) {
 	if r.getErr != nil {
 		return nil, r.getErr
 	}
-	return r.postUpdateRepository.GetByID(id)
+	return r.postUpdateRepository.GetByID(ctx, id)
 }
 
-func (r *permissionPostRepository) Delete(uint) error {
+func (r *permissionPostRepository) Delete(context.Context, uint) error {
 	r.deleted = true
 	return nil
 }
@@ -61,7 +62,7 @@ func TestCreatePostEnforcesRolePermissions(t *testing.T) {
 			posts := &permissionPostRepository{}
 			useCase := newPermissionUseCase(posts, &auditRepositoryStub{})
 
-			_, err := useCase.CreatePost(7, string(test.role), CreatePostDTO{
+			_, err := useCase.CreatePost(context.Background(), 7, string(test.role), CreatePostDTO{
 				Title: "Title", Slug: "slug", Content: "content",
 				Status: string(test.status), CategoryID: 1,
 			}, "")
@@ -80,7 +81,7 @@ func TestCreatePostWithoutStatusDefaultsToDraft(t *testing.T) {
 	posts := &permissionPostRepository{}
 	useCase := newPermissionUseCase(posts, &auditRepositoryStub{})
 
-	created, err := useCase.CreatePost(7, string(domain.UserRoleAuthor), CreatePostDTO{
+	created, err := useCase.CreatePost(context.Background(), 7, string(domain.UserRoleAuthor), CreatePostDTO{
 		Title: "Title", Slug: "slug", Content: "content", CategoryID: 1,
 	}, "")
 	if err != nil {
@@ -111,7 +112,7 @@ func TestUpdatePostRequiresOwnershipForAuthors(t *testing.T) {
 			}}
 			useCase := newPermissionUseCase(posts, &auditRepositoryStub{})
 
-			_, err := useCase.UpdatePost(1, test.userID, string(test.role), CreatePostDTO{
+			_, err := useCase.UpdatePost(context.Background(), 1, test.userID, string(test.role), CreatePostDTO{
 				Title: "Updated", Slug: "updated", Content: "content", CategoryID: 1,
 			}, "")
 
@@ -131,7 +132,7 @@ func TestUpdatePostRejectsAuthorPublishingOwnPost(t *testing.T) {
 	}}
 	useCase := newPermissionUseCase(posts, &auditRepositoryStub{})
 
-	_, err := useCase.UpdatePost(1, 7, string(domain.UserRoleAuthor), CreatePostDTO{
+	_, err := useCase.UpdatePost(context.Background(), 1, 7, string(domain.UserRoleAuthor), CreatePostDTO{
 		Title: "Updated", Slug: "updated", Content: "content",
 		Status: string(domain.PostStatusPublished), CategoryID: 1,
 	}, "")
@@ -165,7 +166,7 @@ func TestDeletePostChecksAccessBeforeDeleting(t *testing.T) {
 			audits := &auditRepositoryStub{}
 			useCase := newPermissionUseCase(posts, audits)
 
-			err := useCase.DeletePost(1, test.userID, string(test.role), "")
+			err := useCase.DeletePost(context.Background(), 1, test.userID, string(test.role), "")
 
 			if !errors.Is(err, test.wantErr) {
 				t.Fatalf("error = %v, want %v", err, test.wantErr)
@@ -185,14 +186,14 @@ func TestDeletePostChecksAccessBeforeDeleting(t *testing.T) {
 
 func TestDeletePostDistinguishesMissingPostFromDatabaseFailure(t *testing.T) {
 	missing := &permissionPostRepository{getErr: domain.ErrPostNotFound}
-	err := newPermissionUseCase(missing, &auditRepositoryStub{}).DeletePost(1, 7, string(domain.UserRoleAdmin), "")
+	err := newPermissionUseCase(missing, &auditRepositoryStub{}).DeletePost(context.Background(), 1, 7, string(domain.UserRoleAdmin), "")
 	if !errors.Is(err, domain.ErrPostNotFound) {
 		t.Fatalf("error = %v, want ErrPostNotFound", err)
 	}
 
 	databaseFailure := errors.New("database is down")
 	broken := &permissionPostRepository{getErr: databaseFailure}
-	err = newPermissionUseCase(broken, &auditRepositoryStub{}).DeletePost(1, 7, string(domain.UserRoleAdmin), "")
+	err = newPermissionUseCase(broken, &auditRepositoryStub{}).DeletePost(context.Background(), 1, 7, string(domain.UserRoleAdmin), "")
 	if !errors.Is(err, databaseFailure) || errors.Is(err, domain.ErrPostNotFound) {
 		t.Fatalf("database failure was reported as %v", err)
 	}
@@ -205,7 +206,7 @@ func TestModeratePostRules(t *testing.T) {
 		}}
 		useCase := newPermissionUseCase(posts, &auditRepositoryStub{})
 
-		_, err := useCase.ModeratePost(1, 5, string(domain.PostStatusPublished), "", "")
+		_, err := useCase.ModeratePost(context.Background(), 1, 5, string(domain.PostStatusPublished), "", "")
 		if !errors.Is(err, domain.ErrPostNotInReview) {
 			t.Fatalf("error = %v, want ErrPostNotInReview", err)
 		}
@@ -217,7 +218,7 @@ func TestModeratePostRules(t *testing.T) {
 		}}
 		useCase := newPermissionUseCase(posts, &auditRepositoryStub{})
 
-		_, err := useCase.ModeratePost(1, 5, string(domain.PostStatusRejected), "", "")
+		_, err := useCase.ModeratePost(context.Background(), 1, 5, string(domain.PostStatusRejected), "", "")
 		if !errors.Is(err, domain.ErrRejectionReasonRequired) {
 			t.Fatalf("error = %v, want ErrRejectionReasonRequired", err)
 		}
@@ -229,7 +230,7 @@ func TestModeratePostRules(t *testing.T) {
 		}}
 		useCase := newPermissionUseCase(posts, &auditRepositoryStub{})
 
-		_, err := useCase.ModeratePost(1, 5, string(domain.PostStatusDraft), "", "")
+		_, err := useCase.ModeratePost(context.Background(), 1, 5, string(domain.PostStatusDraft), "", "")
 		if !errors.Is(err, domain.ErrInvalidPostStatus) {
 			t.Fatalf("error = %v, want ErrInvalidPostStatus", err)
 		}
@@ -242,7 +243,7 @@ func TestModeratePostRules(t *testing.T) {
 		audits := &auditRepositoryStub{}
 		useCase := newPermissionUseCase(posts, audits)
 
-		moderated, err := useCase.ModeratePost(1, 5, string(domain.PostStatusPublished), "", "")
+		moderated, err := useCase.ModeratePost(context.Background(), 1, 5, string(domain.PostStatusPublished), "", "")
 		if err != nil {
 			t.Fatalf("ModeratePost returned error: %v", err)
 		}

@@ -1,7 +1,8 @@
 package persistence
 
 import (
-	"api/internal/domain"
+	"context"
+	"github.com/VTV06012004/ai_cms/internal/domain"
 
 	"gorm.io/gorm"
 )
@@ -14,9 +15,9 @@ func NewMenuRepository(db *gorm.DB) domain.MenuRepository {
 	return &MenuRepository{db: db}
 }
 
-func (r *MenuRepository) GetAll() ([]domain.Menu, error) {
+func (r *MenuRepository) GetAll(ctx context.Context) ([]domain.Menu, error) {
 	var models []MenuModel
-	if err := r.db.Preload("MenuItems", orderMenuItems).Find(&models).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("MenuItems", orderMenuItems).Find(&models).Error; err != nil {
 		return nil, err
 	}
 	var domains []domain.Menu
@@ -26,18 +27,18 @@ func (r *MenuRepository) GetAll() ([]domain.Menu, error) {
 	return domains, nil
 }
 
-func (r *MenuRepository) GetByID(id uint) (*domain.Menu, error) {
+func (r *MenuRepository) GetByID(ctx context.Context, id uint) (*domain.Menu, error) {
 	var model MenuModel
-	if err := r.db.Preload("MenuItems", orderMenuItems).First(&model, id).Error; err != nil {
+	if err := r.db.WithContext(ctx).Preload("MenuItems", orderMenuItems).First(&model, id).Error; err != nil {
 		return nil, notFoundOr(err, domain.ErrMenuNotFound)
 	}
 	domainMenu := model.ToDomain()
 	return &domainMenu, nil
 }
 
-func (r *MenuRepository) Create(menu *domain.Menu) (*domain.Menu, error) {
+func (r *MenuRepository) Create(ctx context.Context, menu *domain.Menu) (*domain.Menu, error) {
 	var created *domain.Menu
-	err := r.db.Transaction(func(tx *gorm.DB) error {
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		data := menu.Data()
 		model := MenuModel{
 			Name:     data.Name,
@@ -70,8 +71,8 @@ func (r *MenuRepository) Create(menu *domain.Menu) (*domain.Menu, error) {
 	return created, err
 }
 
-func (r *MenuRepository) Delete(id uint) error {
-	return r.db.Delete(&MenuModel{}, id).Error
+func (r *MenuRepository) Delete(ctx context.Context, id uint) error {
+	return r.db.WithContext(ctx).Delete(&MenuModel{}, id).Error
 }
 
 func orderMenuItems(db *gorm.DB) *gorm.DB {
@@ -79,9 +80,9 @@ func orderMenuItems(db *gorm.DB) *gorm.DB {
 }
 
 // Update đổi tên, vị trí và thay toàn bộ các mục của menu trong một transaction.
-func (r *MenuRepository) Update(menu *domain.Menu) (*domain.Menu, error) {
+func (r *MenuRepository) Update(ctx context.Context, menu *domain.Menu) (*domain.Menu, error) {
 	data := menu.Data()
-	err := r.db.Transaction(func(tx *gorm.DB) error {
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&MenuModel{}).Where("id = ?", data.ID).
 			Updates(map[string]any{"name": data.Name, "location": data.Location}).Error; err != nil {
 			return err
@@ -105,7 +106,7 @@ func (r *MenuRepository) Update(menu *domain.Menu) (*domain.Menu, error) {
 	if err != nil {
 		return nil, err
 	}
-	return r.GetByID(data.ID)
+	return r.GetByID(ctx, data.ID)
 }
 
 var _ domain.MenuRepository = (*MenuRepository)(nil)

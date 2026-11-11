@@ -1,6 +1,6 @@
 package persistence
 
-import "api/internal/domain"
+import "github.com/VTV06012004/ai_cms/internal/domain"
 
 type CategoryModel struct {
 	ID          uint   `gorm:"primaryKey"`

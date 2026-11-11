@@ -2,8 +2,7 @@
 
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import axios from 'axios';
-import { apiUrl, mediaUrl } from '@/lib/api';
+import { apiClient, apiUrl, mediaUrl } from '@/lib/api';
 
 function PostDetailContent() {
   const [post, setPost] = useState<any>(null);
@@ -17,7 +16,7 @@ function PostDetailContent() {
   useEffect(() => {
     const fetchPostDetail = async () => {
       try {
-        const res = await axios.get(apiUrl(`posts/${id}`));
+        const res = await apiClient.get(apiUrl(`posts/${id}`));
         const postData = res.data.data || res.data;
         setPost(postData);
         setLoading(false);

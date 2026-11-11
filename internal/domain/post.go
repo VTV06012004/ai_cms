@@ -20,7 +20,6 @@ type Post struct {
 	title           string
 	slug            string
 	content         string
-	excerpt         string
 	status          PostStatus
 	rejectionReason string
 	authorID        uint
@@ -29,8 +28,6 @@ type Post struct {
 	moderator       *User
 	categoryID      uint
 	category        *Category
-	seoTitle        string
-	seoDescription  string
 	publishedAt     *time.Time
 	scheduledAt     *time.Time
 	createdAt       time.Time
@@ -43,7 +40,6 @@ type PostData struct {
 	Title           string
 	Slug            string
 	Content         string
-	Excerpt         string
 	Status          PostStatus
 	RejectionReason string
 	AuthorID        uint
@@ -52,8 +48,6 @@ type PostData struct {
 	Moderator       *User
 	CategoryID      uint
 	Category        *Category
-	SEOTitle        string
-	SEODescription  string
 	PublishedAt     *time.Time
 	ScheduledAt     *time.Time
 	CreatedAt       time.Time
@@ -109,10 +103,9 @@ func ReconstitutePost(data PostData) *Post {
 	}
 	return &Post{
 		id: data.ID, title: data.Title, slug: data.Slug, content: data.Content,
-		excerpt: data.Excerpt, status: data.Status, rejectionReason: data.RejectionReason,
+		status: data.Status, rejectionReason: data.RejectionReason,
 		authorID: data.AuthorID, author: cloneUser(data.Author), moderatorID: moderatorID,
 		moderator: cloneUser(data.Moderator), categoryID: data.CategoryID, category: category,
-		seoTitle: data.SEOTitle, seoDescription: data.SEODescription,
 		publishedAt: publishedAt, createdAt: data.CreatedAt,
 		updatedAt: data.UpdatedAt, tags: append([]Tag(nil), data.Tags...),
 		scheduledAt: scheduledAt,
@@ -141,10 +134,9 @@ func (p *Post) Data() PostData {
 	}
 	return PostData{
 		ID: p.id, Title: p.title, Slug: p.slug, Content: p.content,
-		Excerpt: p.excerpt, Status: p.status, RejectionReason: p.rejectionReason,
+		Status: p.status, RejectionReason: p.rejectionReason,
 		AuthorID: p.authorID, Author: cloneUser(p.author), ModeratorID: moderatorID,
 		Moderator: cloneUser(p.moderator), CategoryID: p.categoryID, Category: category,
-		SEOTitle: p.seoTitle, SEODescription: p.seoDescription,
 		PublishedAt: publishedAt, CreatedAt: p.createdAt,
 		UpdatedAt: p.updatedAt, Tags: append([]Tag(nil), p.tags...),
 		ScheduledAt: scheduledAt,
@@ -221,17 +213,45 @@ func isValidPostStatus(status PostStatus) bool {
 }
 
 // ApplySchedule đồng bộ giờ hẹn với trạng thái: chỉ bài "scheduled" mới có giờ hẹn.
+// Không gửi giờ (nil) nghĩa là giữ nguyên giờ hẹn hiện có.
 func (p *Post) ApplySchedule(at *time.Time, now time.Time) error {
 	if p.status != PostStatusScheduled {
 		p.scheduledAt = nil
 		return nil
 	}
-	if at == nil || !at.After(now) {
+	if at == nil {
+		if p.scheduledAt == nil {
+			return ErrInvalidScheduleTime
+		}
+		return nil
+	}
+	// Giờ hẹn không đổi thì chấp nhận, kể cả khi đã quá hạn và đang chờ tác vụ nền đăng bài.
+	if p.scheduledAt != nil && p.scheduledAt.Truncate(time.Minute).Equal(at.Truncate(time.Minute)) {
+		return nil
+	}
+	if !at.After(now) {
 		return ErrInvalidScheduleTime
 	}
 	t := *at
 	p.scheduledAt = &t
 	return nil
+}
+
+// SettleStatus áp các quy tắc trạng thái sau mỗi lần tạo hoặc sửa bài:
+//  1. Người không được xuất bản trực tiếp (author) sửa bài đã đăng hoặc đang hẹn giờ
+//     thì bài quay về "review" để được duyệt lại.
+//  2. Bài "published" chưa có giờ đăng (đăng trực tiếp) thì ghi nhận giờ đăng.
+func (p *Post) SettleStatus(editor UserRole, now time.Time) {
+	live := p.status == PostStatusPublished || p.status == PostStatusScheduled
+	if live && !editor.CanPublishDirectly() {
+		p.status = PostStatusReview
+		p.publishedAt = nil
+		p.scheduledAt = nil
+	}
+	if p.status == PostStatusPublished && p.publishedAt == nil {
+		at := now
+		p.publishedAt = &at
+	}
 }
 
 // PublishScheduled đăng bài hẹn giờ khi đã đến hạn.

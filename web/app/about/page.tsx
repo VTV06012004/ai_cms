@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { logout } from '@/lib/api';
 
 export default function AboutPage() {
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -24,12 +25,8 @@ export default function AboutPage() {
     }
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('userRole');
-    localStorage.removeItem('userId');
-    localStorage.removeItem('userName');
-    localStorage.removeItem('userEmail');
+  const handleLogout = async () => {
+    await logout();
     router.push('/login');
   };
 

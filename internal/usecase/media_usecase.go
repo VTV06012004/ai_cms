@@ -1,10 +1,11 @@
 package usecase
 
 import (
-	"api/internal/domain"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
+	"github.com/VTV06012004/ai_cms/internal/domain"
 	"image"
 	_ "image/gif"
 	_ "image/jpeg"
@@ -25,9 +26,9 @@ var (
 )
 
 type MediaStorage interface {
-	Save(name string, content []byte) error
-	List() ([]domain.MediaFile, error)
-	Delete(name string) error
+	Save(ctx context.Context, name string, content []byte) error
+	List(ctx context.Context) ([]domain.MediaFile, error)
+	Delete(ctx context.Context, name string) error
 }
 
 type MediaUseCase struct {
@@ -38,7 +39,10 @@ func NewMediaUseCase(storage MediaStorage) *MediaUseCase {
 	return &MediaUseCase{storage: storage}
 }
 
-func (uc *MediaUseCase) UploadImage(originalName string, content []byte) (string, error) {
+func (uc *MediaUseCase) UploadImage(ctx context.Context, originalName string, content []byte) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	if len(content) > MaxImageSize {
 		return "", ErrImageTooLarge
 	}
@@ -52,14 +56,14 @@ func (uc *MediaUseCase) UploadImage(originalName string, content []byte) (string
 		return "", ErrInvalidImage
 	}
 	name := fmt.Sprintf("%d%s", time.Now().UnixNano(), extension)
-	if err := uc.storage.Save(name, content); err != nil {
+	if err := uc.storage.Save(ctx, name, content); err != nil {
 		return "", err
 	}
 	return name, nil
 }
 
-func (uc *MediaUseCase) ListImages(page domain.PageRequest) ([]domain.MediaFile, domain.PageInfo, error) {
-	all, err := uc.storage.List()
+func (uc *MediaUseCase) ListImages(ctx context.Context, page domain.PageRequest) ([]domain.MediaFile, domain.PageInfo, error) {
+	all, err := uc.storage.List(ctx)
 	if err != nil {
 		return nil, domain.PageInfo{}, err
 	}
@@ -87,11 +91,11 @@ func (uc *MediaUseCase) ListImages(page domain.PageRequest) ([]domain.MediaFile,
 	return images[start:end], page.Info(total), nil
 }
 
-func (uc *MediaUseCase) DeleteImage(name string) error {
+func (uc *MediaUseCase) DeleteImage(ctx context.Context, name string) error {
 	if name != filepath.Base(name) || !isImageName(name) {
 		return domain.ErrMediaNotFound
 	}
-	return uc.storage.Delete(name)
+	return uc.storage.Delete(ctx, name)
 }
 
 func isImageName(name string) bool {

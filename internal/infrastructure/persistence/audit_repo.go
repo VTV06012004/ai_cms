@@ -1,7 +1,8 @@
 package persistence
 
 import (
-	"api/internal/domain"
+	"context"
+	"github.com/VTV06012004/ai_cms/internal/domain"
 
 	"gorm.io/gorm"
 )
@@ -14,7 +15,7 @@ func NewAuditRepository(db *gorm.DB) domain.AuditRepository {
 	return &AuditRepository{db: db}
 }
 
-func (r *AuditRepository) RecordLog(userID uint, action, target, details, ipAddress string) error {
+func (r *AuditRepository) RecordLog(ctx context.Context, userID uint, action, target, details, ipAddress string) error {
 	data := domain.NewAuditLog(userID, action, target, details, ipAddress).Data()
 	log := AuditLogModel{
 		UserID:    data.UserID,
@@ -23,16 +24,17 @@ func (r *AuditRepository) RecordLog(userID uint, action, target, details, ipAddr
 		Details:   data.Details,
 		IPAddress: data.IPAddress,
 	}
-	return r.db.Create(&log).Error
+	return r.db.WithContext(ctx).Create(&log).Error
 }
 
-func (r *AuditRepository) GetAll(page domain.PageRequest) ([]domain.AuditLog, int64, error) {
+func (r *AuditRepository) GetAll(ctx context.Context, page domain.PageRequest) ([]domain.AuditLog, int64, error) {
 	var total int64
-	if err := r.db.Model(&AuditLogModel{}).Count(&total).Error; err != nil {
+	db := r.db.WithContext(ctx)
+	if err := db.Model(&AuditLogModel{}).Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	var logs []AuditLogModel
-	err := r.db.Preload("User").Order("created_at DESC, id DESC").
+	err := db.Preload("User").Order("created_at DESC, id DESC").
 		Limit(page.PerPage).Offset(page.Offset()).
 		Find(&logs).Error
 	if err != nil {

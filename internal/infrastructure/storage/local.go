@@ -1,9 +1,10 @@
 package storage
 
 import (
-	"api/internal/domain"
+	"context"
 	"errors"
 	"fmt"
+	"github.com/VTV06012004/ai_cms/internal/domain"
 	"os"
 	"path/filepath"
 )
@@ -16,7 +17,10 @@ func NewLocalFileStorage(directory string) *LocalFileStorage {
 	return &LocalFileStorage{directory: directory}
 }
 
-func (s *LocalFileStorage) Save(name string, content []byte) error {
+func (s *LocalFileStorage) Save(ctx context.Context, name string, content []byte) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	path := filepath.Join(s.directory, filepath.Base(name))
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0644)
 	if err != nil {
@@ -32,13 +36,19 @@ func (s *LocalFileStorage) Save(name string, content []byte) error {
 	return nil
 }
 
-func (s *LocalFileStorage) List() ([]domain.MediaFile, error) {
+func (s *LocalFileStorage) List(ctx context.Context) ([]domain.MediaFile, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	entries, err := os.ReadDir(s.directory)
 	if err != nil {
 		return nil, fmt.Errorf("không thể đọc thư mục upload: %w", err)
 	}
 	files := make([]domain.MediaFile, 0, len(entries))
 	for _, entry := range entries {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		if entry.IsDir() {
 			continue
 		}
@@ -51,7 +61,10 @@ func (s *LocalFileStorage) List() ([]domain.MediaFile, error) {
 	return files, nil
 }
 
-func (s *LocalFileStorage) Delete(name string) error {
+func (s *LocalFileStorage) Delete(ctx context.Context, name string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	err := os.Remove(filepath.Join(s.directory, filepath.Base(name)))
 	if errors.Is(err, os.ErrNotExist) {
 		return domain.ErrMediaNotFound

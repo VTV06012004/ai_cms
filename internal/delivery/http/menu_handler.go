@@ -3,7 +3,7 @@ package http
 import (
 	"net/http"
 
-	"api/internal/usecase"
+	"github.com/VTV06012004/ai_cms/internal/usecase"
 
 	"github.com/gin-gonic/gin"
 )
@@ -39,7 +39,7 @@ func (r menuRequest) toInput() usecase.MenuInputDTO {
 }
 
 func (h *MenuHandler) GetAll(c *gin.Context) {
-	menus, err := h.useCase.GetAllMenus()
+	menus, err := h.useCase.GetAllMenus(c.Request.Context())
 	if err != nil {
 		writeError(c, err)
 		return
@@ -57,7 +57,7 @@ func (h *MenuHandler) Create(c *gin.Context) {
 		writeInvalidRequest(c)
 		return
 	}
-	menu, err := h.useCase.CreateMenu(currentUserID(c), request.toInput(), c.ClientIP())
+	menu, err := h.useCase.CreateMenu(c.Request.Context(), currentUserID(c), request.toInput(), c.ClientIP())
 	if err != nil {
 		writeError(c, err)
 		return
@@ -75,7 +75,7 @@ func (h *MenuHandler) Update(c *gin.Context) {
 		writeInvalidRequest(c)
 		return
 	}
-	menu, err := h.useCase.UpdateMenu(currentUserID(c), id, request.toInput(), c.ClientIP())
+	menu, err := h.useCase.UpdateMenu(c.Request.Context(), currentUserID(c), id, request.toInput(), c.ClientIP())
 	if err != nil {
 		writeError(c, err)
 		return
@@ -88,7 +88,7 @@ func (h *MenuHandler) Delete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := h.useCase.DeleteMenu(currentUserID(c), id, c.ClientIP()); err != nil {
+	if err := h.useCase.DeleteMenu(c.Request.Context(), currentUserID(c), id, c.ClientIP()); err != nil {
 		writeError(c, err)
 		return
 	}

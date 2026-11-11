@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"api/internal/domain"
+	"github.com/VTV06012004/ai_cms/internal/domain"
 )
 
 type paginationResponse struct {

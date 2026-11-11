@@ -2,6 +2,8 @@ package http
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"image"
 	"image/color"
 	"image/png"
@@ -12,24 +14,23 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
-	"api/internal/domain"
-	"api/internal/usecase"
+	"github.com/VTV06012004/ai_cms/internal/domain"
+	"github.com/VTV06012004/ai_cms/internal/usecase"
 
 	"github.com/gin-gonic/gin"
 )
 
-type mediaStorageTestStub struct {
-	calls int
-}
+type mediaStorageTestStub struct{}
 
-func (*mediaStorageTestStub) Save(string, []byte) error {
+func (*mediaStorageTestStub) Save(context.Context, string, []byte) error {
 	return nil
 }
 
-func (*mediaStorageTestStub) List() ([]domain.MediaFile, error) { return nil, nil }
+func (*mediaStorageTestStub) List(context.Context) ([]domain.MediaFile, error) { return nil, nil }
 
-func (*mediaStorageTestStub) Delete(string) error { return nil }
+func (*mediaStorageTestStub) Delete(context.Context, string) error { return nil }
 
 func newMultipartUploadRequest(t *testing.T, filename string, content []byte) *http.Request {
 	t.Helper()
@@ -64,7 +65,7 @@ func validPNGForHandlerTest(t *testing.T) []byte {
 func TestUploadImageHandlerAcceptsImageAndRejectsInvalidOrOversizedFiles(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	storage := &mediaStorageTestStub{}
-	handler := NewMediaHandler(usecase.NewMediaUseCase(storage))
+	handler := NewMediaHandler(usecase.NewMediaUseCase(storage), "")
 	router := gin.New()
 	router.POST("/api/upload", handler.UploadImage)
 
@@ -113,7 +114,7 @@ func TestServeUploadedFileSetsActiveContentProtectionHeaders(t *testing.T) {
 	})
 
 	router := gin.New()
-	router.GET("/uploads/*filepath", NewMediaHandler(nil).ServeUploadedFile)
+	router.GET("/uploads/*filepath", NewMediaHandler(nil, "").ServeUploadedFile)
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/uploads/old.html", nil)
 	router.ServeHTTP(response, request)
@@ -126,5 +127,70 @@ func TestServeUploadedFileSetsActiveContentProtectionHeaders(t *testing.T) {
 	}
 	if got := response.Header().Get("Content-Security-Policy"); !strings.Contains(got, "sandbox") {
 		t.Fatalf("Content-Security-Policy = %q, want sandbox restriction", got)
+	}
+}
+
+type mediaListStorageStub struct{ mediaStorageTestStub }
+
+func (*mediaListStorageStub) List(context.Context) ([]domain.MediaFile, error) {
+	return []domain.MediaFile{{Name: "a.png", Size: 1, ModifiedAt: time.Now()}}, nil
+}
+
+func TestMediaURLsUseConfiguredBaseAndIgnoreRequestHeaders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	tests := []struct {
+		name       string
+		base       string
+		wantPrefix string
+	}{
+		{name: "configured https base", base: "https://cms.example.com/", wantPrefix: "https://cms.example.com/uploads/"},
+		{name: "no base gives a relative path", base: "", wantPrefix: "/uploads/"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			handler := NewMediaHandler(usecase.NewMediaUseCase(&mediaListStorageStub{}), test.base)
+			router := gin.New()
+			router.POST("/api/upload", handler.UploadImage)
+			router.GET("/api/media", handler.List)
+
+			upload := newMultipartUploadRequest(t, "image.png", validPNGForHandlerTest(t))
+			upload.Host = "evil.example"
+			upload.Header.Set("X-Forwarded-Host", "evil.example")
+			upload.Header.Set("X-Forwarded-Proto", "http")
+			uploadResponse := httptest.NewRecorder()
+			router.ServeHTTP(uploadResponse, upload)
+			if uploadResponse.Code != http.StatusOK {
+				t.Fatalf("upload status = %d, body=%s", uploadResponse.Code, uploadResponse.Body.String())
+			}
+			var uploaded struct {
+				URL string `json:"url"`
+			}
+			if err := json.Unmarshal(uploadResponse.Body.Bytes(), &uploaded); err != nil {
+				t.Fatalf("decode upload response: %v", err)
+			}
+			if !strings.HasPrefix(uploaded.URL, test.wantPrefix) || strings.Contains(uploaded.URL, "evil.example") {
+				t.Fatalf("upload url = %q, want prefix %q and nothing from request headers", uploaded.URL, test.wantPrefix)
+			}
+
+			list := httptest.NewRequest(http.MethodGet, "/api/media", nil)
+			list.Host = "evil.example"
+			listResponse := httptest.NewRecorder()
+			router.ServeHTTP(listResponse, list)
+			if listResponse.Code != http.StatusOK {
+				t.Fatalf("list status = %d, body=%s", listResponse.Code, listResponse.Body.String())
+			}
+			var listed struct {
+				Data []struct {
+					URL string `json:"url"`
+				} `json:"data"`
+			}
+			if err := json.Unmarshal(listResponse.Body.Bytes(), &listed); err != nil {
+				t.Fatalf("decode list response: %v", err)
+			}
+			if len(listed.Data) != 1 || listed.Data[0].URL != test.wantPrefix+"a.png" {
+				t.Fatalf("list data = %+v, want one url %q", listed.Data, test.wantPrefix+"a.png")
+			}
+		})
 	}
 }

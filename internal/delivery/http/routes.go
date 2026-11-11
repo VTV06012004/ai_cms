@@ -1,8 +1,8 @@
 package http
 
 import (
-	"api/internal/delivery/http/middleware"
-	"api/internal/infrastructure/security"
+	"github.com/VTV06012004/ai_cms/internal/delivery/http/middleware"
+	"github.com/VTV06012004/ai_cms/internal/infrastructure/security"
 
 	"net/http"
 
@@ -24,12 +24,17 @@ func RegisterRoutes(
 ) {
 	// Public Routes
 	r.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "Gin + MySQL 9.7 Backend is running!"})
+		c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "CMS API is running"})
 	})
 	r.GET("/docs", ServeDocs)
 	r.GET("/docs/openapi.yaml", ServeOpenAPISpec)
-	r.POST("/api/auth/register", authH.Register)
-	r.POST("/api/auth/login", authH.Login)
+	auth := r.Group("/api/auth")
+	{
+		auth.POST("/register", authH.RateLimitIP(), authH.Register)
+		auth.POST("/login", authH.RateLimitIP(), authH.Login)
+		auth.POST("/refresh", authH.RateLimitSession(), authH.Refresh)
+		auth.POST("/logout", authH.RateLimitSession(), authH.Logout)
+	}
 
 	r.GET("/api/posts", middleware.OptionalAuthMiddleware(credentials), postH.GetAll)
 	r.GET("/api/posts/:id", middleware.OptionalAuthMiddleware(credentials), postH.GetByID)
