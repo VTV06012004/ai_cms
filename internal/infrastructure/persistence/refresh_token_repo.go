@@ -19,12 +19,20 @@ func NewRefreshTokenRepository(db *gorm.DB) domain.RefreshTokenRepository {
 	return &RefreshTokenRepository{db: db}
 }
 
+// Create lưu token mới và dọn luôn các token đã hết hạn của cùng người dùng,
+// để bảng không phình dần mà không cần tiến trình dọn riêng.
 func (r *RefreshTokenRepository) Create(ctx context.Context, userID uint, tokenHash string, expiresAt time.Time) error {
-	return r.db.WithContext(ctx).Create(&RefreshTokenModel{
-		TokenHash: tokenHash,
-		UserID:    userID,
-		ExpiresAt: expiresAt,
-	}).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("user_id = ? AND expires_at <= ?", userID, time.Now().UTC()).
+			Delete(&RefreshTokenModel{}).Error; err != nil {
+			return err
+		}
+		return tx.Create(&RefreshTokenModel{
+			TokenHash: tokenHash,
+			UserID:    userID,
+			ExpiresAt: expiresAt,
+		}).Error
+	})
 }
 
 func (r *RefreshTokenRepository) Rotate(ctx context.Context, oldHash, newHash string, now, expiresAt time.Time) (uint, error) {

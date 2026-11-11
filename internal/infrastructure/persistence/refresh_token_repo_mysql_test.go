@@ -61,3 +61,35 @@ func TestRefreshTokenRotationIsSingleUse(t *testing.T) {
 		t.Fatalf("active token count = %d, want 1", activeTokens)
 	}
 }
+
+func TestRefreshTokenCreateRemovesExpiredTokensOfTheSameUser(t *testing.T) {
+	db, userID, _ := newPostSlugMySQLTestDB(t)
+	repository := NewRefreshTokenRepository(db)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	expired := strings.Repeat("d", 64)
+	active := strings.Repeat("e", 64)
+	fresh := strings.Repeat("f", 64)
+	if err := repository.Create(ctx, userID, expired, now.Add(-time.Hour)); err != nil {
+		t.Fatalf("create expired token: %v", err)
+	}
+	if err := repository.Create(ctx, userID, active, now.Add(time.Hour)); err != nil {
+		t.Fatalf("create active token: %v", err)
+	}
+	if err := repository.Create(ctx, userID, fresh, now.Add(2*time.Hour)); err != nil {
+		t.Fatalf("create fresh token: %v", err)
+	}
+
+	var hashes []string
+	if err := db.Model(&RefreshTokenModel{}).Where("user_id = ?", userID).Pluck("token_hash", &hashes).Error; err != nil {
+		t.Fatalf("list tokens: %v", err)
+	}
+	if len(hashes) != 2 {
+		t.Fatalf("tokens after cleanup = %v, want only the active and fresh ones", hashes)
+	}
+	for _, hash := range hashes {
+		if hash == expired {
+			t.Fatal("expired token was not removed")
+		}
+	}
+}
