@@ -1,4 +1,4 @@
-FROM golang:1.21-alpine AS build
+FROM golang:1.23-alpine AS build
 
 WORKDIR /src
 
@@ -9,13 +9,15 @@ COPY . .
 RUN test -z "$(gofmt -l $(find . -name '*.go'))"
 RUN go test ./...
 RUN CGO_ENABLED=0 GOOS=linux go build -o /out/server ./cmd/server
-
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/migrate ./cmd/migrate
 FROM alpine:3.20
 
 RUN apk add --no-cache ca-certificates
+ENV GIN_MODE=release
 WORKDIR /app
 
 COPY --from=build /out/server ./server
+COPY --from=build /out/migrate ./migrate
 RUN mkdir -p /app/uploads
 
 EXPOSE 8080

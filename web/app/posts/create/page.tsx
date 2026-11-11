@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import axios from 'axios';
-import { apiUrl, mediaUrl } from '@/lib/api';
+import { isAxiosError } from 'axios';
+import { apiClient, apiUrl, mediaUrl } from '@/lib/api';
 import { removeMarkdownImage } from '@/lib/markdown';
 import MediaPicker from '@/app/components/MediaPicker';
 
@@ -47,11 +47,8 @@ export default function CreatePostPage() {
 
     const fetchData = async () => {
       try {
-        const token = localStorage.getItem('token');
         // 1. Lấy Categories
-        const catRes = await axios.get(apiUrl('categories'), {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const catRes = await apiClient.get(apiUrl('categories'));
         const categoryData = Array.isArray(catRes.data) ? catRes.data : (catRes.data.data || []);
         setCategories(categoryData);
         if (categoryData.length > 0) {
@@ -59,9 +56,7 @@ export default function CreatePostPage() {
         }
 
         // 2. Lấy Tags
-        const tagRes = await axios.get(apiUrl('tags'), {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const tagRes = await apiClient.get(apiUrl('tags'));
         const tagData = Array.isArray(tagRes.data) ? tagRes.data : (tagRes.data.data || []);
         setTags(tagData);
 
@@ -95,12 +90,7 @@ export default function CreatePostPage() {
     formData.append('file', file);
 
     try {
-      const token = localStorage.getItem('token');
-      const res = await axios.post(apiUrl('upload'), formData, {
-        headers: { 
-          Authorization: `Bearer ${token}` 
-        }
-      });
+      const res = await apiClient.post(apiUrl('upload'), formData);
 
       const imageUrl = mediaUrl(res.data.url);
       setPreviewImage(imageUrl); 
@@ -108,7 +98,7 @@ export default function CreatePostPage() {
       alert('Upload ảnh thành công và đã chèn vào nội dung!');
     } catch (err) {
       console.error('Lỗi upload ảnh:', err);
-      const message = axios.isAxiosError(err) ? err.response?.data?.error : undefined;
+      const message = isAxiosError(err) ? err.response?.data?.error : undefined;
       alert(message || 'Upload ảnh thất bại!');
     }
   };
@@ -141,7 +131,7 @@ export default function CreatePostPage() {
         return;
       }
 
-      await axios.post(
+      await apiClient.post(
         apiUrl('posts'),
         {
           title,
@@ -154,11 +144,6 @@ export default function CreatePostPage() {
             status === 'scheduled' && scheduledAt
               ? new Date(scheduledAt).toISOString()
               : null,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
         }
       );
 

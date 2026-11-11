@@ -221,17 +221,45 @@ func isValidPostStatus(status PostStatus) bool {
 }
 
 // ApplySchedule đồng bộ giờ hẹn với trạng thái: chỉ bài "scheduled" mới có giờ hẹn.
+// Không gửi giờ (nil) nghĩa là giữ nguyên giờ hẹn hiện có.
 func (p *Post) ApplySchedule(at *time.Time, now time.Time) error {
 	if p.status != PostStatusScheduled {
 		p.scheduledAt = nil
 		return nil
 	}
-	if at == nil || !at.After(now) {
+	if at == nil {
+		if p.scheduledAt == nil {
+			return ErrInvalidScheduleTime
+		}
+		return nil
+	}
+	// Giờ hẹn không đổi thì chấp nhận, kể cả khi đã quá hạn và đang chờ tác vụ nền đăng bài.
+	if p.scheduledAt != nil && p.scheduledAt.Truncate(time.Minute).Equal(at.Truncate(time.Minute)) {
+		return nil
+	}
+	if !at.After(now) {
 		return ErrInvalidScheduleTime
 	}
 	t := *at
 	p.scheduledAt = &t
 	return nil
+}
+
+// SettleStatus áp các quy tắc trạng thái sau mỗi lần tạo hoặc sửa bài:
+//  1. Người không được xuất bản trực tiếp (author) sửa bài đã đăng hoặc đang hẹn giờ
+//     thì bài quay về "review" để được duyệt lại.
+//  2. Bài "published" chưa có giờ đăng (đăng trực tiếp) thì ghi nhận giờ đăng.
+func (p *Post) SettleStatus(editor UserRole, now time.Time) {
+	live := p.status == PostStatusPublished || p.status == PostStatusScheduled
+	if live && !editor.CanPublishDirectly() {
+		p.status = PostStatusReview
+		p.publishedAt = nil
+		p.scheduledAt = nil
+	}
+	if p.status == PostStatusPublished && p.publishedAt == nil {
+		at := now
+		p.publishedAt = &at
+	}
 }
 
 // PublishScheduled đăng bài hẹn giờ khi đã đến hạn.

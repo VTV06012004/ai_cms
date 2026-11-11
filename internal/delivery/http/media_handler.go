@@ -2,9 +2,11 @@ package http
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"api/internal/domain"
@@ -14,11 +16,19 @@ import (
 )
 
 type MediaHandler struct {
-	useCase *usecase.MediaUseCase
+	useCase       *usecase.MediaUseCase
+	publicBaseURL string
 }
 
-func NewMediaHandler(uc *usecase.MediaUseCase) *MediaHandler {
-	return &MediaHandler{useCase: uc}
+// NewMediaHandler tạo handler ảnh. publicBaseURL là gốc URL công khai của API (ví dụ
+// https://cms.example.com); để trống thì URL ảnh là đường dẫn tương đối /uploads/...
+// URL không bao giờ được dựng từ header Host của request, vì client có thể gửi giá trị giả.
+func NewMediaHandler(uc *usecase.MediaUseCase, publicBaseURL string) *MediaHandler {
+	return &MediaHandler{useCase: uc, publicBaseURL: strings.TrimRight(publicBaseURL, "/")}
+}
+
+func (h *MediaHandler) uploadURL(name string) string {
+	return h.publicBaseURL + "/uploads/" + name
 }
 
 func (h *MediaHandler) UploadImage(c *gin.Context) {
@@ -27,51 +37,39 @@ func (h *MediaHandler) UploadImage(c *gin.Context) {
 	if err != nil {
 		var maxBytesError *http.MaxBytesError
 		if errors.As(err, &maxBytesError) {
-			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": usecase.ErrImageTooLarge.Error()})
+			writeError(c, usecase.ErrImageTooLarge)
 			return
 		}
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Không tìm thấy file tải lên"})
+		writeError(c, errMissingUploadFile)
 		return
 	}
 	if file.Size > usecase.MaxImageSize {
-		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": usecase.ErrImageTooLarge.Error()})
+		writeError(c, usecase.ErrImageTooLarge)
 		return
 	}
 	source, err := file.Open()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc file tải lên"})
+		writeError(c, fmt.Errorf("open uploaded file: %w", err))
 		return
 	}
 	defer source.Close()
 	content, err := io.ReadAll(io.LimitReader(source, usecase.MaxImageSize+1))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể đọc file tải lên"})
+		writeError(c, fmt.Errorf("read uploaded file: %w", err))
 		return
 	}
 	if len(content) > usecase.MaxImageSize {
-		c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": usecase.ErrImageTooLarge.Error()})
+		writeError(c, usecase.ErrImageTooLarge)
 		return
 	}
-	filename, err := h.useCase.UploadImage(file.Filename, content)
+	filename, err := h.useCase.UploadImage(c.Request.Context(), file.Filename, content)
 	if err != nil {
-		if errors.Is(err, usecase.ErrInvalidImage) {
-			c.JSON(http.StatusUnsupportedMediaType, gin.H{"error": usecase.ErrInvalidImage.Error()})
-			return
-		}
-		if errors.Is(err, usecase.ErrImageTooLarge) {
-			c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": usecase.ErrImageTooLarge.Error()})
-			return
-		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Không thể lưu file trên server"})
+		writeError(c, err)
 		return
-	}
-	scheme := "http"
-	if c.Request.TLS != nil {
-		scheme = "https"
 	}
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Upload ảnh thành công!",
-		"url":     scheme + "://" + c.Request.Host + "/uploads/" + filename,
+		"url":     h.uploadURL(filename),
 	})
 }
 
@@ -80,7 +78,7 @@ func (h *MediaHandler) ServeUploadedFile(c *gin.Context) {
 	c.Header("Content-Security-Policy", "default-src 'none'; sandbox")
 	filename := filepath.Base(c.Param("filepath"))
 	if filename == "." || filename == string(filepath.Separator) {
-		c.Status(http.StatusNotFound)
+		writeError(c, domain.ErrMediaNotFound)
 		return
 	}
 	c.File(filepath.Join("uploads", filename))
@@ -93,25 +91,16 @@ type mediaResponse struct {
 	UploadedAt time.Time `json:"uploaded_at"`
 }
 
-func requestBaseURL(c *gin.Context) string {
-	scheme := "http"
-	if c.Request.TLS != nil {
-		scheme = "https"
-	}
-	return scheme + "://" + c.Request.Host
-}
-
 func (h *MediaHandler) List(c *gin.Context) {
-	files, info, err := h.useCase.ListImages(parsePage(c))
+	files, info, err := h.useCase.ListImages(c.Request.Context(), parsePage(c))
 	if err != nil {
 		writeError(c, err)
 		return
 	}
-	base := requestBaseURL(c)
 	responses := make([]mediaResponse, 0, len(files))
 	for _, file := range files {
 		responses = append(responses, mediaResponse{
-			Name: file.Name, URL: base + "/uploads/" + file.Name,
+			Name: file.Name, URL: h.uploadURL(file.Name),
 			Size: file.Size, UploadedAt: file.ModifiedAt,
 		})
 	}
@@ -119,11 +108,9 @@ func (h *MediaHandler) List(c *gin.Context) {
 }
 
 func (h *MediaHandler) Delete(c *gin.Context) {
-	if err := h.useCase.DeleteImage(c.Param("name")); err != nil {
+	if err := h.useCase.DeleteImage(c.Request.Context(), c.Param("name")); err != nil {
 		writeError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Đã xóa ảnh thành công"})
 }
-
-var _ = domain.ErrMediaNotFound

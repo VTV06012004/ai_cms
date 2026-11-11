@@ -1,17 +1,23 @@
 package usecase
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"log"
+	"strings"
+	"unicode/utf8"
 
 	"api/internal/domain"
 )
 
 var ErrInvalidCredentials = errors.New("email hoặc mật khẩu không chính xác")
+var ErrInvalidRefreshToken = domain.ErrInvalidRefreshToken
 
 type CredentialService interface {
 	HashPassword(password string) (string, error)
 	CheckPasswordHash(password, hash string) bool
+	PasswordHashNeedsUpgrade(hash string) bool
 	GenerateToken(userID uint, email, role string) (string, error)
 }
 
@@ -47,7 +53,19 @@ type LoginResponse struct {
 	User  domain.User
 }
 
-func (uc *UserUseCase) Register(input RegisterDTO, ipAddress string) (uint, error) {
+func (uc *UserUseCase) Register(ctx context.Context, input RegisterDTO, ipAddress string) (uint, error) {
+	if strings.TrimSpace(input.Name) == "" {
+		return 0, domain.ErrUserNameRequired
+	}
+	email, err := domain.NewEmail(input.Email)
+	if err != nil {
+		return 0, err
+	}
+	input.Email = string(email)
+	if utf8.RuneCountInString(input.Password) < MinPasswordLength {
+		return 0, domain.ErrPasswordTooShort
+	}
+
 	hashedPassword, err := uc.credentials.HashPassword(input.Password)
 	if err != nil {
 		return 0, fmt.Errorf("không thể mã hóa mật khẩu: %w", err)
@@ -56,22 +74,22 @@ func (uc *UserUseCase) Register(input RegisterDTO, ipAddress string) (uint, erro
 	if err != nil {
 		return 0, err
 	}
-	if err := uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
-		created, err := repositories.Users.Create(user)
+	if err := uc.unitOfWork.WithinTransaction(ctx, func(repositories TransactionRepositories) error {
+		created, err := repositories.Users.Create(ctx, user)
 		if err != nil {
 			return fmt.Errorf("không thể tạo tài khoản: %w", err)
 		}
 		user = created
 		data := user.Data()
-		return repositories.Audits.RecordLog(data.ID, "REGISTER", fmt.Sprintf("User #%d", data.ID), "Đăng ký tài khoản mới: "+string(data.Email), ipAddress)
+		return repositories.Audits.RecordLog(ctx, data.ID, "REGISTER", fmt.Sprintf("User #%d", data.ID), "Đăng ký tài khoản mới: "+string(data.Email), ipAddress)
 	}); err != nil {
 		return 0, fmt.Errorf("không thể hoàn tất đăng ký: %w", err)
 	}
 	return user.Data().ID, nil
 }
 
-func (uc *UserUseCase) EnsureInitialAdmin(config InitialAdminConfig) error {
-	adminCount, err := uc.userRepo.CountByRole(domain.UserRoleAdmin)
+func (uc *UserUseCase) EnsureInitialAdmin(ctx context.Context, config InitialAdminConfig) error {
+	adminCount, err := uc.userRepo.CountByRole(ctx, domain.UserRoleAdmin)
 	if err != nil {
 		return fmt.Errorf("không thể kiểm tra tài khoản quản trị: %w", err)
 	}
@@ -81,8 +99,8 @@ func (uc *UserUseCase) EnsureInitialAdmin(config InitialAdminConfig) error {
 	if config.Email == "" || config.Password == "" {
 		return errors.New("cần cấu hình INITIAL_ADMIN_EMAIL và INITIAL_ADMIN_PASSWORD khi chưa có tài khoản admin")
 	}
-	if len(config.Password) < 6 {
-		return errors.New("INITIAL_ADMIN_PASSWORD phải có ít nhất 6 ký tự")
+	if utf8.RuneCountInString(config.Password) < MinPasswordLength {
+		return fmt.Errorf("INITIAL_ADMIN_PASSWORD phải có ít nhất %d ký tự", MinPasswordLength)
 	}
 	if config.Name == "" {
 		config.Name = "Administrator"
@@ -96,21 +114,21 @@ func (uc *UserUseCase) EnsureInitialAdmin(config InitialAdminConfig) error {
 		return fmt.Errorf("cấu hình admin ban đầu không hợp lệ: %w", err)
 	}
 
-	err = uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
-		adminCount, err := repositories.Users.CountByRole(domain.UserRoleAdmin)
+	err = uc.unitOfWork.WithinTransaction(ctx, func(repositories TransactionRepositories) error {
+		adminCount, err := repositories.Users.CountByRole(ctx, domain.UserRoleAdmin)
 		if err != nil {
 			return fmt.Errorf("không thể kiểm tra tài khoản quản trị: %w", err)
 		}
 		if adminCount > 0 {
 			return nil
 		}
-		created, err := repositories.Users.Create(user)
+		created, err := repositories.Users.Create(ctx, user)
 		if err != nil {
 			return fmt.Errorf("không thể tạo admin ban đầu: %w", err)
 		}
 		user = created
 		data := user.Data()
-		return repositories.Audits.RecordLog(data.ID, "BOOTSTRAP_ADMIN", fmt.Sprintf("User #%d", data.ID), "Khởi tạo tài khoản quản trị gốc", "")
+		return repositories.Audits.RecordLog(ctx, data.ID, "BOOTSTRAP_ADMIN", fmt.Sprintf("User #%d", data.ID), "Khởi tạo tài khoản quản trị gốc", "")
 	})
 	if err != nil {
 		return fmt.Errorf("không thể hoàn tất khởi tạo admin ban đầu: %w", err)
@@ -118,8 +136,22 @@ func (uc *UserUseCase) EnsureInitialAdmin(config InitialAdminConfig) error {
 	return nil
 }
 
-func (uc *UserUseCase) Login(input LoginDTO, ipAddress string) (*LoginResponse, error) {
-	user, err := uc.userRepo.GetByEmail(input.Email)
+// MinPasswordLength là độ dài tối thiểu (tính theo ký tự) của mật khẩu.
+const MinPasswordLength = 6
+
+func (uc *UserUseCase) upgradePasswordHash(ctx context.Context, userID uint, password string) error {
+	upgradedHash, err := uc.credentials.HashPassword(password)
+	if err != nil {
+		return fmt.Errorf("không thể tạo hash mới: %w", err)
+	}
+	if err := uc.userRepo.UpdatePasswordHash(ctx, userID, upgradedHash); err != nil {
+		return fmt.Errorf("không thể lưu hash mới: %w", err)
+	}
+	return nil
+}
+
+func (uc *UserUseCase) Login(ctx context.Context, input LoginDTO, ipAddress string) (*LoginResponse, error) {
+	user, err := uc.userRepo.GetByEmail(ctx, input.Email)
 	if err != nil {
 		if errors.Is(err, domain.ErrUserNotFound) {
 			return nil, ErrInvalidCredentials
@@ -130,12 +162,19 @@ func (uc *UserUseCase) Login(input LoginDTO, ipAddress string) (*LoginResponse, 
 	if !uc.credentials.CheckPasswordHash(input.Password, userData.PasswordHash) {
 		return nil, ErrInvalidCredentials
 	}
+	if uc.credentials.PasswordHashNeedsUpgrade(userData.PasswordHash) {
+		// Mật khẩu đã đúng nên lỗi nâng cấp hash không được chặn đăng nhập;
+		// hash cũ vẫn dùng được và sẽ được nâng cấp ở lần đăng nhập sau.
+		if err := uc.upgradePasswordHash(ctx, userData.ID, input.Password); err != nil {
+			log.Printf("không thể nâng cấp mã hóa mật khẩu của user #%d: %v", userData.ID, err)
+		}
+	}
 	token, err := uc.credentials.GenerateToken(userData.ID, string(userData.Email), string(userData.Role))
 	if err != nil {
 		return nil, fmt.Errorf("không thể tạo token xác thực: %w", err)
 	}
-	if err := uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
-		return repositories.Audits.RecordLog(userData.ID, "LOGIN", fmt.Sprintf("User #%d", userData.ID), "Đăng nhập thành công vào hệ thống", ipAddress)
+	if err := uc.unitOfWork.WithinTransaction(ctx, func(repositories TransactionRepositories) error {
+		return repositories.Audits.RecordLog(ctx, userData.ID, "LOGIN", fmt.Sprintf("User #%d", userData.ID), "Đăng nhập thành công vào hệ thống", ipAddress)
 	}); err != nil {
 		return nil, fmt.Errorf("đăng nhập thành công nhưng không thể ghi audit log: %w", err)
 	}
@@ -143,15 +182,15 @@ func (uc *UserUseCase) Login(input LoginDTO, ipAddress string) (*LoginResponse, 
 	return &LoginResponse{Token: token, User: *domain.ReconstituteUser(userData)}, nil
 }
 
-func (uc *UserUseCase) GetAllUsers(page domain.PageRequest) ([]domain.User, domain.PageInfo, error) {
-	users, total, err := uc.userRepo.GetAll(page)
+func (uc *UserUseCase) GetAllUsers(ctx context.Context, page domain.PageRequest) ([]domain.User, domain.PageInfo, error) {
+	users, total, err := uc.userRepo.GetAll(ctx, page)
 	if err != nil {
 		return nil, domain.PageInfo{}, err
 	}
 	return users, page.Info(total), nil
 }
 
-func (uc *UserUseCase) UpdateUserRole(currentUserID, targetUserID uint, newRole, ipAddress string) error {
+func (uc *UserUseCase) UpdateUserRole(ctx context.Context, currentUserID, targetUserID uint, newRole, ipAddress string) error {
 	if currentUserID == targetUserID {
 		return domain.ErrCannotChangeOwnRole
 	}
@@ -159,18 +198,18 @@ func (uc *UserUseCase) UpdateUserRole(currentUserID, targetUserID uint, newRole,
 	if !role.IsValid() {
 		return domain.ErrInvalidRole
 	}
-	if err := uc.unitOfWork.WithinTransaction(func(repositories TransactionRepositories) error {
-		target, err := repositories.Users.GetByID(targetUserID)
+	if err := uc.unitOfWork.WithinTransaction(ctx, func(repositories TransactionRepositories) error {
+		target, err := repositories.Users.GetByID(ctx, targetUserID)
 		if err != nil {
 			return err
 		}
 		if err := target.ChangeRole(role); err != nil {
 			return err
 		}
-		if err := repositories.Users.UpdateRole(targetUserID, string(target.Data().Role)); err != nil {
+		if err := repositories.Users.UpdateRole(ctx, targetUserID, string(target.Data().Role)); err != nil {
 			return err
 		}
-		return repositories.Audits.RecordLog(currentUserID, "UPDATE_USER_ROLE", fmt.Sprintf("User #%d", targetUserID), fmt.Sprintf("Đổi vai trò thành '%s'", target.Data().Role), ipAddress)
+		return repositories.Audits.RecordLog(ctx, currentUserID, "UPDATE_USER_ROLE", fmt.Sprintf("User #%d", targetUserID), fmt.Sprintf("Đổi vai trò thành '%s'", target.Data().Role), ipAddress)
 	}); err != nil {
 		return err
 	}
