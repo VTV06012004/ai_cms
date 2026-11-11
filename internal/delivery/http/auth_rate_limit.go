@@ -7,7 +7,10 @@ import (
 )
 
 const (
-	authRateLimit    = 5
+	authRateLimit = 5
+	// Làm mới phiên và đăng xuất xảy ra thường xuyên hơn đăng nhập (mỗi tab, mỗi
+	// 15 phút) và nhiều người có thể dùng chung một IP, nên có ngưỡng riêng.
+	sessionRateLimit = 60
 	authRateWindow   = time.Minute
 	maxRateLimitKeys = 100_000
 	cleanupEveryHits = 256
@@ -19,13 +22,18 @@ type authRateLimitEntry struct {
 }
 
 type authRateLimiter struct {
+	limit    int
 	mu       sync.Mutex
 	entries  map[string]authRateLimitEntry
 	requests uint64
 }
 
 func newAuthRateLimiter() *authRateLimiter {
-	return &authRateLimiter{entries: make(map[string]authRateLimitEntry)}
+	return newRateLimiter(authRateLimit)
+}
+
+func newRateLimiter(limit int) *authRateLimiter {
+	return &authRateLimiter{limit: limit, entries: make(map[string]authRateLimitEntry)}
 }
 
 func (l *authRateLimiter) allow(ip, email string, now time.Time) bool {
@@ -59,7 +67,7 @@ func (l *authRateLimiter) allowKeys(keys []string, now time.Time) bool {
 			newKeys++
 			continue
 		}
-		if entry.count >= authRateLimit {
+		if entry.count >= l.limit {
 			return false
 		}
 	}

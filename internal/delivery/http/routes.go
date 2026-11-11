@@ -29,12 +29,11 @@ func RegisterRoutes(
 	r.GET("/docs", ServeDocs)
 	r.GET("/docs/openapi.yaml", ServeOpenAPISpec)
 	auth := r.Group("/api/auth")
-	auth.Use(authH.RateLimitIP())
 	{
-		auth.POST("/register", authH.Register)
-		auth.POST("/login", authH.Login)
-		auth.POST("/refresh", authH.Refresh)
-		auth.POST("/logout", authH.Logout)
+		auth.POST("/register", authH.RateLimitIP(), authH.Register)
+		auth.POST("/login", authH.RateLimitIP(), authH.Login)
+		auth.POST("/refresh", authH.RateLimitSession(), authH.Refresh)
+		auth.POST("/logout", authH.RateLimitSession(), authH.Logout)
 	}
 
 	r.GET("/api/posts", middleware.OptionalAuthMiddleware(credentials), postH.GetAll)
