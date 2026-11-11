@@ -5,7 +5,7 @@ import axios, {
   type InternalAxiosRequestConfig,
 } from 'axios';
 import { describe, expect, it, vi } from 'vitest';
-import { API_BASE_URL, apiUrl, installSessionHandling, mediaUrl } from './api';
+import { API_BASE_URL, apiClient, apiUrl, installSessionHandling, logout, mediaUrl } from './api';
 
 type Reply = { status: number };
 
@@ -239,5 +239,19 @@ describe('apiUrl and mediaUrl', () => {
   it('resolves relative media paths against the API origin', () => {
     const origin = new URL(API_BASE_URL).origin;
     expect(mediaUrl('/uploads/a.png')).toBe(`${origin}/uploads/a.png`);
+  });
+});
+
+describe('logout', () => {
+  it('clears the session and the saved drafts, even when the server call fails', async () => {
+    localStorage.setItem('token', 't');
+    localStorage.setItem('cms.draft.post.3.7', '{}');
+    vi.spyOn(apiClient, 'post').mockRejectedValueOnce(new Error('offline'));
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await logout();
+
+    expect(localStorage.getItem('token')).toBeNull();
+    expect(localStorage.getItem('cms.draft.post.3.7')).toBeNull();
   });
 });

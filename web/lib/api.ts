@@ -1,4 +1,5 @@
 import axios, { type AxiosInstance } from "axios";
+import { clearAllDrafts } from "./draft";
 
 const defaultApiBaseUrl = "http://localhost:8081/api";
 
@@ -179,6 +180,8 @@ export async function logout(): Promise<void> {
     console.error('Không thể thu hồi phiên đăng nhập trên máy chủ:', error);
   } finally {
     clearSession();
+    // Đăng xuất chủ động mới xóa bản nháp; phiên hết hạn (401) thì giữ lại để khôi phục.
+    clearAllDrafts();
   }
 }
 
