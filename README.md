@@ -24,6 +24,7 @@ Next.js frontend, run together with Docker Compose.
    | --- | --- |
    | `JWT_SECRET` | Signing key for login tokens. Required; the API exits without it. |
    | `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD` | Database passwords. Required by Compose. |
+   | `AUTH_COOKIE_SECURE` | Set to `false` for local HTTP; must be `true` behind HTTPS in production. |
    | `PUBLIC_BASE_URL` | Public origin of the API, used to build image URLs (for example `https://cms.example.com`). Optional: when empty the API returns relative `/uploads/...` paths. Never derived from the request's `Host` header. |
    | `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD` | Credentials of the first admin account (password: at least 6 characters). Used only when the database has no admin yet. |
 
@@ -116,13 +117,20 @@ without documenting it, so keep the spec in sync.
   credential was ever committed, treat it as compromised and rotate it in the
   database and every service that uses it; removing the file in a new commit does
   not remove it from Git history.
-- **Login tokens** expire after 15 minutes. A role change therefore takes effect
-  for existing tokens no later than their expiration; users must sign in again to
-  receive a token with their updated role.
+- **Login tokens** expire after 15 minutes. The browser transparently refreshes
+  access tokens using a rotating, HttpOnly cookie that expires after 7 days.
+  Refreshing also picks up the user's current role.
+- **Refresh cookie.** Refresh tokens are opaque and stored only as SHA-256 hashes
+  in the database. Refresh rotates a token atomically; logout revokes the active
+  token. `AUTH_COOKIE_SECURE` defaults to `true`; set it to `false` only for local
+  HTTP development. Keep it `true` behind HTTPS in production. HTTPS uses
+  `SameSite=None` for separately hosted frontend/API origins; local HTTP uses
+  `SameSite=Lax`. Refresh and logout also validate the request `Origin`.
 - **Passwords and authentication limits.** Passwords use Argon2id. Existing PBKDF2
-  hashes are verified and upgraded to Argon2id after a successful login. Login and
-  registration allow up to five requests per minute per IP and email; limits are
-  held in memory per API process.
+  hashes are verified and upgraded to Argon2id after a successful login. Login,
+  registration, refresh, and logout share a limit of five requests per minute per
+  IP; login and registration are also limited per email. Limits are held in memory
+  per API process.
 - **HTTP operations.** The API runs Gin in release mode, emits structured request
   logs with an `X-Request-ID` response header, and applies request read/write/idle
   timeouts.

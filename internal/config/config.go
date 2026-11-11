@@ -30,6 +30,7 @@ type Config struct {
 	DatabaseDSN        string
 	JWTSecret          string
 	CORSAllowedOrigins []string
+	AuthCookieSecure   bool
 	// PublicBaseURL là gốc URL công khai của API (ví dụ https://cms.example.com), dùng để dựng
 	// URL ảnh. Để trống thì API trả đường dẫn tương đối /uploads/...
 	PublicBaseURL string
@@ -47,6 +48,7 @@ func load(getenv func(string) string) (Config, error) {
 		DatabaseDSN:        strings.TrimSpace(getenv("DB_DSN")),
 		JWTSecret:          getenv("JWT_SECRET"),
 		CORSAllowedOrigins: splitList(getenv("CORS_ALLOWED_ORIGINS")),
+		AuthCookieSecure:   true,
 		PublicBaseURL:      strings.TrimRight(strings.TrimSpace(getenv("PUBLIC_BASE_URL")), "/"),
 		InitialAdmin: InitialAdmin{
 			Name:     getenv("INITIAL_ADMIN_NAME"),
@@ -63,6 +65,13 @@ func load(getenv func(string) string) (Config, error) {
 	}
 	if cfg.Port == "" {
 		cfg.Port = defaultPort
+	}
+	if cookieSecure := strings.TrimSpace(getenv("AUTH_COOKIE_SECURE")); cookieSecure != "" {
+		value, err := strconv.ParseBool(cookieSecure)
+		if err != nil {
+			return Config{}, fmt.Errorf("AUTH_COOKIE_SECURE must be true or false, got %q", cookieSecure)
+		}
+		cfg.AuthCookieSecure = value
 	}
 	if port, err := strconv.Atoi(cfg.Port); err != nil || port < 1 || port > 65535 {
 		return Config{}, fmt.Errorf("PORT must be a number between 1 and 65535, got %q", cfg.Port)

@@ -33,6 +33,8 @@ func RegisterRoutes(
 	{
 		auth.POST("/register", authH.Register)
 		auth.POST("/login", authH.Login)
+		auth.POST("/refresh", authH.Refresh)
+		auth.POST("/logout", authH.Logout)
 	}
 
 	r.GET("/api/posts", middleware.OptionalAuthMiddleware(credentials), postH.GetAll)

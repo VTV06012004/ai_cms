@@ -13,6 +13,7 @@ var (
 	errMissingRoleIdentity   = httperrors.ErrMissingRoleIdentity
 	errMissingUploadFile     = httperrors.ErrMissingUploadFile
 	errAuthRateLimitExceeded = httperrors.ErrAuthRateLimitExceeded
+	errForbidden             = httperrors.ErrForbidden
 )
 
 func writeError(c *gin.Context, err error) {

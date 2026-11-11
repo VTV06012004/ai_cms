@@ -86,6 +86,10 @@ paths:
       responses:
         '200':
           description: Đăng nhập thành công
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+              description: Refresh token HttpOnly, được dùng tự động khi access token hết hạn.
           content:
             application/json:
               schema:
@@ -102,6 +106,42 @@ paths:
                       role: { $ref: '#/components/schemas/Role' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /api/auth/refresh:
+    post:
+      tags: [Xác thực]
+      summary: Làm mới access token bằng refresh cookie
+      description: Xoay refresh cookie HttpOnly và trả access token mới cùng thông tin vai trò hiện tại.
+      responses:
+        '200':
+          description: Phiên được làm mới
+          headers:
+            Set-Cookie:
+              schema: { type: string }
+              description: Refresh token mới (HttpOnly, Secure theo cấu hình).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  user:
+                    type: object
+                    properties:
+                      id: { type: integer }
+                      name: { type: string }
+                      email: { type: string }
+                      role: { $ref: '#/components/schemas/Role' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/auth/logout:
+    post:
+      tags: [Xác thực]
+      summary: Thu hồi refresh token và đăng xuất
+      responses:
+        '204': { description: Đã đăng xuất }
+        '403': { $ref: '#/components/responses/Forbidden' }
 
   /api/posts:
     get:
