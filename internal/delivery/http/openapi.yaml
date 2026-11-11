@@ -916,7 +916,6 @@ components:
         title: { type: string }
         slug: { type: string }
         content: { type: string }
-        excerpt: { type: string }
         status: { $ref: '#/components/schemas/PostStatus' }
         rejection_reason: { type: string }
         author_id: { type: integer }
@@ -925,8 +924,6 @@ components:
         moderator: { $ref: '#/components/schemas/User' }
         category_id: { type: integer }
         category: { $ref: '#/components/schemas/Category' }
-        seo_title: { type: string }
-        seo_description: { type: string }
         published_at: { type: string, format: date-time, nullable: true }
         scheduled_at:
           type: string

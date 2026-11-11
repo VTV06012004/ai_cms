@@ -24,7 +24,7 @@ func RegisterRoutes(
 ) {
 	// Public Routes
 	r.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "Gin + MySQL 9.7 Backend is running!"})
+		c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "CMS API is running"})
 	})
 	r.GET("/docs", ServeDocs)
 	r.GET("/docs/openapi.yaml", ServeOpenAPISpec)

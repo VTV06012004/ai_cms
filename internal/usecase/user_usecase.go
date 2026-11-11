@@ -151,7 +151,13 @@ func (uc *UserUseCase) upgradePasswordHash(ctx context.Context, userID uint, pas
 }
 
 func (uc *UserUseCase) Login(ctx context.Context, input LoginDTO, ipAddress string) (*LoginResponse, error) {
-	user, err := uc.userRepo.GetByEmail(ctx, input.Email)
+	// Chuẩn hóa email giống lúc Register để " user@example.com " vẫn đăng nhập được.
+	// Email sai định dạng không thể khớp tài khoản nào nên coi như sai thông tin.
+	email, err := domain.NewEmail(input.Email)
+	if err != nil {
+		return nil, ErrInvalidCredentials
+	}
+	user, err := uc.userRepo.GetByEmail(ctx, string(email))
 	if err != nil {
 		if errors.Is(err, domain.ErrUserNotFound) {
 			return nil, ErrInvalidCredentials
