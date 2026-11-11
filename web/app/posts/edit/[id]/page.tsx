@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import axios from 'axios';
-import { apiUrl, mediaUrl } from '@/lib/api';
+import { apiClient, apiErrorMessage, apiUrl, mediaUrl } from '@/lib/api';
+import { draftKey as buildDraftKey, type PostDraft } from '@/lib/draft';
 import { removeMarkdownImage } from '@/lib/markdown';
+import { useSession } from '@/lib/session';
+import { useDraftAutosave } from '@/lib/useDraftAutosave';
 import MediaPicker from '@/app/components/MediaPicker';
 
 interface Category {
@@ -50,7 +52,8 @@ function EditPostForm() {
   const [scheduledAt, setScheduledAt] = useState('');
   const [categoryId, setCategoryId] = useState<number | ''>('');
   
-  const [userRole, setUserRole] = useState('author');
+  const session = useSession();
+  const userRole = session.role;
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -71,12 +74,32 @@ function EditPostForm() {
   const params = useParams();
   const { id } = params;
 
+  const draftKey = buildDraftKey(session.userId || null, String(id));
+  const form = useMemo<PostDraft>(
+    () => ({ title, slug, content, status, scheduledAt, categoryId, selectedTags }),
+    [title, slug, content, status, scheduledAt, categoryId, selectedTags],
+  );
+  const applyDraft = useCallback((draft: PostDraft) => {
+    setTitle(draft.title);
+    setSlug(draft.slug);
+    setContent(draft.content);
+    setStatus(draft.status);
+    setScheduledAt(draft.scheduledAt);
+    setCategoryId(draft.categoryId);
+    setSelectedTags(draft.selectedTags);
+    const imageMatch = draft.content.match(/!\[.*?\]\((.*?)\)/);
+    setPreviewImage(imageMatch && imageMatch[1] ? mediaUrl(imageMatch[1]) : '');
+  }, []);
+  const draft = useDraftAutosave({
+    draftKey,
+    form,
+    ready: !loading,
+    apply: applyDraft,
+  });
+
   const fetchRevisions = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get(apiUrl(`posts-revisions/${id}`), {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await apiClient.get(apiUrl(`posts-revisions/${id}`));
       setRevisions(res.data.data || []);
     } catch (err) {
       console.error('Không thể tải lịch sử phiên bản:', err);
@@ -84,27 +107,18 @@ function EditPostForm() {
   };
 
   useEffect(() => {
-    const role = localStorage.getItem('userRole') || 'author';
-    setUserRole(role);
 
     const fetchData = async () => {
       try {
-        const token = localStorage.getItem('token');
-        const catRes = await axios.get(apiUrl('categories'), {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const catRes = await apiClient.get(apiUrl('categories'));
         const catData = Array.isArray(catRes.data) ? catRes.data : (catRes.data.data || []);
         setCategories(catData);
 
-        const tagRes = await axios.get(apiUrl('tags'), {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const tagRes = await apiClient.get(apiUrl('tags'));
         const tagData = Array.isArray(tagRes.data) ? tagRes.data : (tagRes.data.data || []);
         setTags(tagData);
 
-        const postRes = await axios.get(apiUrl(`posts/${id}`), {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const postRes = await apiClient.get(apiUrl(`posts/${id}`));
         const post = postRes.data.data || postRes.data; 
 
         if (post) {
@@ -128,7 +142,7 @@ function EditPostForm() {
           }
 
           const postTags = post.tags || post.Tags || [];
-          setSelectedTags(postTags.map((t: any) => t.id || t.ID));
+          setSelectedTags(postTags.map((t: { id?: number; ID?: number }) => t.id || t.ID));
         }
 
         fetchRevisions();
@@ -153,12 +167,7 @@ function EditPostForm() {
     formData.append('file', file);
 
     try {
-      const token = localStorage.getItem('token');
-      const res = await axios.post(apiUrl('upload'), formData, {
-        headers: { 
-          Authorization: `Bearer ${token}` 
-        }
-      });
+      const res = await apiClient.post(apiUrl('upload'), formData);
 
       const imageUrl = mediaUrl(res.data.url);
       setPreviewImage(imageUrl);
@@ -166,8 +175,7 @@ function EditPostForm() {
       alert('Upload ảnh thành công và đã chèn vào nội dung!');
     } catch (err) {
       console.error('Lỗi upload ảnh:', err);
-      const message = axios.isAxiosError(err) ? err.response?.data?.error : undefined;
-      alert(message || 'Upload ảnh thất bại!');
+      alert(apiErrorMessage(err, 'Upload ảnh thất bại!'));
     }
   };
 
@@ -186,8 +194,7 @@ function EditPostForm() {
     setLoading(true);
 
     try {
-      const token = localStorage.getItem('token');
-      await axios.put(
+      await apiClient.put(
         apiUrl(`posts/${id}`),
         {
           title,
@@ -200,17 +207,15 @@ function EditPostForm() {
               : null,
           category_id: Number(categoryId),
           tag_ids: selectedTags,
-        },
-        {
-          headers: { Authorization: `Bearer ${token}` }
         }
       );
 
+      draft.markSaved();
       alert('Cập nhật bài viết thành công!');
       router.push('/posts'); 
-    } catch (err: any) {
+    } catch (err) {
       console.error('Lỗi cập nhật:', err);
-      alert(err.response?.data?.error || 'Cập nhật thất bại!');
+      alert(apiErrorMessage(err, 'Cập nhật thất bại!'));
     } finally {
       setLoading(false);
     }
@@ -238,15 +243,12 @@ function EditPostForm() {
     }
     setComparing(true);
     try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get(apiUrl('revisions/compare'), {
+      const res = await apiClient.get(apiUrl('revisions/compare'), {
         params: { from, to },
-        headers: { Authorization: `Bearer ${token}` },
       });
       setComparison(res.data.data);
     } catch (err) {
-      const message = axios.isAxiosError(err) ? err.response?.data?.error : undefined;
-      alert(message || 'Không thể so sánh các phiên bản');
+      alert(apiErrorMessage(err, 'Không thể so sánh các phiên bản'));
     } finally {
       setComparing(false);
     }
@@ -265,13 +267,9 @@ function EditPostForm() {
 
     setRestoringId(rev.id);
     try {
-      const token = localStorage.getItem('token');
-      await axios.post(
+      await apiClient.post(
         apiUrl(`revisions/${rev.id}/restore`),
-        {},
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
+        {}
       );
 
       setTitle(rev.title);
@@ -289,9 +287,9 @@ function EditPostForm() {
 
       alert('Khôi phục phiên bản thành công!');
       fetchRevisions();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Lỗi khôi phục:', err);
-      alert(err.response?.data?.error || 'Khôi phục phiên bản thất bại!');
+      alert(apiErrorMessage(err, 'Khôi phục phiên bản thất bại!'));
     } finally {
       setRestoringId(null);
     }
@@ -300,7 +298,32 @@ function EditPostForm() {
   return (
     <div className="max-w-4xl mx-auto mt-10 p-6 bg-white rounded-lg shadow-md text-black relative">
       <h1 className="text-2xl font-bold mb-6">Chỉnh sửa Bài viết (ID: {id})</h1>
-      
+
+      {draft.pending && (
+        <div className="mb-4 p-3 bg-amber-50 border border-amber-300 rounded-md text-sm text-amber-900">
+          <p>
+            Có bản nháp chưa lưu từ {new Date(draft.pending.savedAt).toLocaleString('vi-VN')}.
+            Khôi phục để tiếp tục chỉnh sửa, hoặc bỏ để dùng bản đã lưu trên máy chủ.
+          </p>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={draft.restore}
+              className="px-3 py-1 bg-amber-600 text-white rounded hover:bg-amber-700"
+            >
+              Khôi phục bản nháp
+            </button>
+            <button
+              type="button"
+              onClick={draft.discard}
+              className="px-3 py-1 bg-white border border-amber-400 rounded hover:bg-amber-100"
+            >
+              Bỏ bản nháp
+            </button>
+          </div>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-sm font-medium mb-1">Tiêu đề</label>
@@ -426,6 +449,11 @@ function EditPostForm() {
           >
             <option value="draft">Bản nháp (Draft)</option>
             <option value="review">Gửi kiểm duyệt (Review)</option>
+            {userRole === 'author' && ['published', 'scheduled', 'rejected'].includes(status) && (
+              <option value={status}>
+                {status === 'published' ? 'Đã đăng (Published)' : status === 'scheduled' ? 'Hẹn giờ (Scheduled)' : 'Bị từ chối (Rejected)'}
+              </option>
+            )}
             {(userRole === 'admin' || userRole === 'editor') && (
               <>
                 <option value="published">Xuất bản (Published)</option>
@@ -433,6 +461,11 @@ function EditPostForm() {
               </>
             )}
           </select>
+          {userRole === 'author' && (status === 'published' || status === 'scheduled') && (
+            <p className="mt-1 text-xs text-amber-600">
+              Sửa bài đã đăng sẽ chuyển bài về trạng thái chờ duyệt để editor duyệt lại.
+            </p>
+          )}
           {status === 'scheduled' && (
             <input
               type="datetime-local"

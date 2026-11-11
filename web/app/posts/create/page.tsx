@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import axios from 'axios';
-import { apiUrl, mediaUrl } from '@/lib/api';
+import { apiClient, apiErrorMessage, apiUrl, mediaUrl } from '@/lib/api';
+import { draftKey as buildDraftKey, type PostDraft } from '@/lib/draft';
 import { removeMarkdownImage } from '@/lib/markdown';
+import { useSession } from '@/lib/session';
+import { useDraftAutosave } from '@/lib/useDraftAutosave';
 import MediaPicker from '@/app/components/MediaPicker';
 
 interface Category {
@@ -31,27 +33,47 @@ export default function CreatePostPage() {
   // State quản lý Trạng thái bài viết và Phân quyền vai trò
   const [status, setStatus] = useState('draft');
   const [scheduledAt, setScheduledAt] = useState('');
-  const [userRole, setUserRole] = useState('author');
+  const session = useSession();
+  const userRole = session.role;
 
   // State cho Ảnh xem trước (Preview Image)
   const [previewImage, setPreviewImage] = useState<string>('');
   const [showMediaPicker, setShowMediaPicker] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const draftKey = buildDraftKey(session.userId || null, 'new');
+  const [dataReady, setDataReady] = useState(false);
   const router = useRouter();
+
+  const form = useMemo<PostDraft>(
+    () => ({ title, slug, content, status, scheduledAt, categoryId, selectedTags }),
+    [title, slug, content, status, scheduledAt, categoryId, selectedTags],
+  );
+  const applyDraft = useCallback((draft: PostDraft) => {
+    setTitle(draft.title);
+    setSlug(draft.slug);
+    setContent(draft.content);
+    setStatus(draft.status);
+    setScheduledAt(draft.scheduledAt);
+    setCategoryId(draft.categoryId);
+    setSelectedTags(draft.selectedTags);
+    const imageMatch = draft.content.match(/!\[.*?\]\((.*?)\)/);
+    setPreviewImage(imageMatch && imageMatch[1] ? imageMatch[1] : '');
+  }, []);
+  const draft = useDraftAutosave({
+    draftKey,
+    form,
+    ready: dataReady,
+    apply: applyDraft,
+  });
 
   // Gọi API lấy danh mục, tags và kiểm tra vai trò user khi load trang
   useEffect(() => {
-    const role = localStorage.getItem('userRole') || 'author';
-    setUserRole(role);
 
     const fetchData = async () => {
       try {
-        const token = localStorage.getItem('token');
         // 1. Lấy Categories
-        const catRes = await axios.get(apiUrl('categories'), {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const catRes = await apiClient.get(apiUrl('categories'));
         const categoryData = Array.isArray(catRes.data) ? catRes.data : (catRes.data.data || []);
         setCategories(categoryData);
         if (categoryData.length > 0) {
@@ -59,14 +81,14 @@ export default function CreatePostPage() {
         }
 
         // 2. Lấy Tags
-        const tagRes = await axios.get(apiUrl('tags'), {
-          headers: { Authorization: `Bearer ${token}` },
-        });
+        const tagRes = await apiClient.get(apiUrl('tags'));
         const tagData = Array.isArray(tagRes.data) ? tagRes.data : (tagRes.data.data || []);
         setTags(tagData);
 
       } catch (err) {
         console.error('Không thể tải dữ liệu danh mục hoặc thẻ:', err);
+      } finally {
+        setDataReady(true);
       }
     };
 
@@ -95,12 +117,7 @@ export default function CreatePostPage() {
     formData.append('file', file);
 
     try {
-      const token = localStorage.getItem('token');
-      const res = await axios.post(apiUrl('upload'), formData, {
-        headers: { 
-          Authorization: `Bearer ${token}` 
-        }
-      });
+      const res = await apiClient.post(apiUrl('upload'), formData);
 
       const imageUrl = mediaUrl(res.data.url);
       setPreviewImage(imageUrl); 
@@ -108,8 +125,7 @@ export default function CreatePostPage() {
       alert('Upload ảnh thành công và đã chèn vào nội dung!');
     } catch (err) {
       console.error('Lỗi upload ảnh:', err);
-      const message = axios.isAxiosError(err) ? err.response?.data?.error : undefined;
-      alert(message || 'Upload ảnh thất bại!');
+      alert(apiErrorMessage(err, 'Upload ảnh thất bại!'));
     }
   };
 
@@ -135,13 +151,12 @@ export default function CreatePostPage() {
     setLoading(true);
 
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
+      if (!session.signedIn) {
         router.push('/login');
         return;
       }
 
-      await axios.post(
+      await apiClient.post(
         apiUrl('posts'),
         {
           title,
@@ -154,18 +169,14 @@ export default function CreatePostPage() {
             status === 'scheduled' && scheduledAt
               ? new Date(scheduledAt).toISOString()
               : null,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
         }
       );
 
+      draft.markSaved();
       router.push('/posts');
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setError(err.response?.data?.error || err.response?.data?.message || 'Có lỗi xảy ra khi tạo bài viết.');
+      setError(apiErrorMessage(err, 'Có lỗi xảy ra khi tạo bài viết.'));
     } finally {
       setLoading(false);
     }
@@ -178,6 +189,31 @@ export default function CreatePostPage() {
       {error && (
         <div className="mb-4 p-3 bg-red-100 text-red-700 rounded-md text-sm">
           {error}
+        </div>
+      )}
+
+      {draft.pending && (
+        <div className="mb-4 p-3 bg-amber-50 border border-amber-300 rounded-md text-sm text-amber-900">
+          <p>
+            Có bản nháp chưa lưu từ {new Date(draft.pending.savedAt).toLocaleString('vi-VN')}.
+            Khôi phục để tiếp tục viết, hoặc bỏ để bắt đầu bài mới.
+          </p>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={draft.restore}
+              className="px-3 py-1 bg-amber-600 text-white rounded hover:bg-amber-700"
+            >
+              Khôi phục bản nháp
+            </button>
+            <button
+              type="button"
+              onClick={draft.discard}
+              className="px-3 py-1 bg-white border border-amber-400 rounded hover:bg-amber-100"
+            >
+              Bỏ bản nháp
+            </button>
+          </div>
         </div>
       )}
 

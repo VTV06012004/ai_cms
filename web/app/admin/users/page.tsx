@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import axios from 'axios';
-import { apiUrl } from '@/lib/api';
+import { apiClient, apiErrorMessage, apiUrl, logout } from '@/lib/api';
+import { readSession, useSession } from '@/lib/session';
 
 interface User {
   id: number;
@@ -16,21 +16,17 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
   const router = useRouter();
+  // ID của chính admin đang đăng nhập, để không cho tự đổi quyền của mình
+  const currentUserId = useSession().userId || null;
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const role = localStorage.getItem('userRole');
-    const storedUserId = localStorage.getItem('userId'); // Lấy ID của chính admin đang đăng nhập
-
-    setCurrentUserId(storedUserId);
-
     // Kiểm tra bảo mật phía client: Chỉ cho phép admin truy cập
-    if (!token || (role || '').toLowerCase() !== 'admin') {
+    const session = readSession();
+    if (!session.signedIn || session.role !== 'admin') {
       alert('Bạn không có quyền truy cập trang này!');
       router.push('/posts');
       return;
@@ -38,13 +34,12 @@ export default function AdminUsersPage() {
 
     const fetchUsers = async () => {
       try {
-        const res = await axios.get(apiUrl('admin/users'), {
-          headers: { Authorization: `Bearer ${token}` },
+        const res = await apiClient.get(apiUrl('admin/users'), {
           params: { page: 1, per_page: 20 },
         });
         setUsers(res.data.data || []);
         setTotalPages(res.data.pagination?.total_pages ?? 1);
-      } catch (err: any) {
+      } catch (err) {
         console.error('Lỗi tải danh sách user:', err);
       } finally {
         setLoading(false);
@@ -57,9 +52,7 @@ export default function AdminUsersPage() {
   const handleLoadMore = async () => {
     setLoadingMore(true);
     try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get(apiUrl('admin/users'), {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await apiClient.get(apiUrl('admin/users'), {
         params: { page: page + 1, per_page: 20 },
       });
       setUsers((prev: User[]) => [...prev, ...(res.data.data || [])]);
@@ -81,19 +74,17 @@ export default function AdminUsersPage() {
 
     try {
       setUpdatingId(userId);
-      const token = localStorage.getItem('token');
-      await axios.put(
+      await apiClient.put(
         apiUrl(`admin/users/${userId}/role`),
-        { role: newRole },
-        { headers: { Authorization: `Bearer ${token}` } }
+        { role: newRole }
       );
 
       setUsers((prev) =>
         prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u))
       );
       alert('Cập nhật quyền thành công!');
-    } catch (err: any) {
-      alert(err.response?.data?.error || 'Cập nhật quyền thất bại!');
+    } catch (err) {
+      alert(apiErrorMessage(err, 'Cập nhật quyền thất bại!'));
     } finally {
       setUpdatingId(null);
     }
@@ -116,8 +107,8 @@ export default function AdminUsersPage() {
               ← Quay lại Bài viết
             </button>
             <button
-              onClick={() => {
-                localStorage.clear();
+              onClick={async () => {
+                await logout();
                 router.push('/login');
               }}
               className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 text-sm font-semibold rounded-lg transition cursor-pointer"

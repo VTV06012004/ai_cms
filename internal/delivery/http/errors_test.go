@@ -29,6 +29,7 @@ func TestWriteErrorMapsBusinessErrorsToStatusCodes(t *testing.T) {
 		status int
 	}{
 		{usecase.ErrInvalidCredentials, http.StatusUnauthorized},
+		{errAuthRateLimitExceeded, http.StatusTooManyRequests},
 		{domain.ErrPostNotFound, http.StatusNotFound},
 		{domain.ErrUserNotFound, http.StatusNotFound},
 		{domain.ErrPostAccessDenied, http.StatusForbidden},
@@ -40,6 +41,9 @@ func TestWriteErrorMapsBusinessErrorsToStatusCodes(t *testing.T) {
 		{domain.ErrCategoryNotFound, http.StatusNotFound},
 		{domain.ErrCategoryInUse, http.StatusConflict},
 		{domain.ErrInvalidCategoryParent, http.StatusBadRequest},
+		{errInvalidID, http.StatusBadRequest},
+		{usecase.ErrInvalidImage, http.StatusUnsupportedMediaType},
+		{usecase.ErrImageTooLarge, http.StatusRequestEntityTooLarge},
 	}
 	for _, tc := range cases {
 		response := runWriteError(tc.err)

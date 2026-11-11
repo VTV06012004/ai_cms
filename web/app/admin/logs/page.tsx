@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import axios from 'axios';
-import { apiUrl } from '@/lib/api';
+import { apiClient, apiErrorStatus, apiUrl } from '@/lib/api';
+import { readSession } from '@/lib/session';
 
 interface User {
   id: number;
@@ -35,28 +35,27 @@ export default function AuditLogsPage() {
   useEffect(() => {
     const fetchAuditLogs = async () => {
       try {
-        const token = localStorage.getItem('token');
-        if (!token) {
+        const session = readSession();
+        if (!session.signedIn) {
           router.push('/login');
           return;
         }
 
-        if (localStorage.getItem('userRole') !== 'admin') {
+        if (session.role !== 'admin') {
           alert('Bạn không có quyền truy cập vào nhật ký hệ thống!');
           router.push('/posts');
           return;
         }
 
-        const res = await axios.get(apiUrl('audit-logs'), {
-          headers: { Authorization: `Bearer ${token}` },
+        const res = await apiClient.get(apiUrl('audit-logs'), {
           params: { page: 1, per_page: 20 },
         });
 
         setLogs(res.data.data || []);
         setTotalPages(res.data.pagination?.total_pages ?? 1);
-      } catch (err: any) {
+      } catch (err) {
         console.error('Lỗi lấy danh sách Audit Logs:', err);
-        if (err.response?.status === 403) {
+        if (apiErrorStatus(err) === 403) {
           setError('Bạn không có quyền xem nhật ký hệ thống.');
         } else {
           setError('Không thể tải nhật ký hệ thống. Vui lòng thử lại sau.');
@@ -72,9 +71,7 @@ export default function AuditLogsPage() {
   const handleLoadMore = async () => {
     setLoadingMore(true);
     try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get(apiUrl('audit-logs'), {
-        headers: { Authorization: `Bearer ${token}` },
+      const res = await apiClient.get(apiUrl('audit-logs'), {
         params: { page: page + 1, per_page: 20 },
       });
       setLogs((prev: AuditLog[]) => [...prev, ...(res.data.data || [])]);
