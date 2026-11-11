@@ -95,6 +95,8 @@ function CategoriesPanel() {
   }, []);
 
   useEffect(() => {
+    // Tải dữ liệu khi vào trang; load() đặt trạng thái loading đồng bộ.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
 
@@ -279,6 +281,8 @@ function TagsPanel() {
   }, []);
 
   useEffect(() => {
+    // Tải dữ liệu khi vào trang; load() đặt trạng thái loading đồng bộ.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
 
@@ -413,6 +417,8 @@ function MenusPanel() {
   }, []);
 
   useEffect(() => {
+    // Tải dữ liệu khi vào trang; load() đặt trạng thái loading đồng bộ.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
 
@@ -645,6 +651,8 @@ export default function CatalogAdminPage() {
       router.push('/posts');
       return;
     }
+    // Chỉ chạy một lần sau khi mount: đọc phiên từ localStorage rồi chặn/chuyển hướng.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRole(storedRole);
   }, [router]);
 
