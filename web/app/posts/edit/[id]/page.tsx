@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { apiClient, apiErrorMessage, apiUrl, mediaUrl } from '@/lib/api';
 import { draftKey as buildDraftKey, type PostDraft } from '@/lib/draft';
 import { removeMarkdownImage } from '@/lib/markdown';
+import { useSession } from '@/lib/session';
 import { useDraftAutosave } from '@/lib/useDraftAutosave';
 import MediaPicker from '@/app/components/MediaPicker';
 
@@ -51,7 +52,8 @@ function EditPostForm() {
   const [scheduledAt, setScheduledAt] = useState('');
   const [categoryId, setCategoryId] = useState<number | ''>('');
   
-  const [userRole, setUserRole] = useState('author');
+  const session = useSession();
+  const userRole = session.role;
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -68,11 +70,11 @@ function EditPostForm() {
   const [comparing, setComparing] = useState(false);
 
   const [loading, setLoading] = useState(true);
-  const [draftKey, setDraftKey] = useState<string | null>(null);
   const router = useRouter();
   const params = useParams();
   const { id } = params;
 
+  const draftKey = buildDraftKey(session.userId || null, String(id));
   const form = useMemo<PostDraft>(
     () => ({ title, slug, content, status, scheduledAt, categoryId, selectedTags }),
     [title, slug, content, status, scheduledAt, categoryId, selectedTags],
@@ -91,7 +93,7 @@ function EditPostForm() {
   const draft = useDraftAutosave({
     draftKey,
     form,
-    ready: !loading && draftKey !== null,
+    ready: !loading,
     apply: applyDraft,
   });
 
@@ -105,9 +107,6 @@ function EditPostForm() {
   };
 
   useEffect(() => {
-    const role = localStorage.getItem('userRole') || 'author';
-    setUserRole(role);
-    setDraftKey(buildDraftKey(localStorage.getItem('userId'), String(id)));
 
     const fetchData = async () => {
       try {

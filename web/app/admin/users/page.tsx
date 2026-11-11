@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiClient, apiErrorMessage, apiUrl, logout } from '@/lib/api';
+import { readSession, useSession } from '@/lib/session';
 
 interface User {
   id: number;
@@ -15,21 +16,17 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
   const router = useRouter();
+  // ID của chính admin đang đăng nhập, để không cho tự đổi quyền của mình
+  const currentUserId = useSession().userId || null;
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const role = localStorage.getItem('userRole');
-    const storedUserId = localStorage.getItem('userId'); // Lấy ID của chính admin đang đăng nhập
-
-    setCurrentUserId(storedUserId);
-
     // Kiểm tra bảo mật phía client: Chỉ cho phép admin truy cập
-    if (!token || (role || '').toLowerCase() !== 'admin') {
+    const session = readSession();
+    if (!session.signedIn || session.role !== 'admin') {
       alert('Bạn không có quyền truy cập trang này!');
       router.push('/posts');
       return;

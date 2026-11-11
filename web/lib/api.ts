@@ -1,5 +1,6 @@
 import axios, { isAxiosError, type AxiosInstance } from "axios";
 import { clearAllDrafts } from "./draft";
+import { notifySessionChanged } from "./session";
 
 const defaultApiBaseUrl = "http://localhost:8081/api";
 
@@ -54,6 +55,7 @@ export function clearSession(): void {
   } catch {
     // Storage can be unavailable (private mode); nothing to clear then.
   }
+  notifySessionChanged();
 }
 
 function isApiRequest(url?: string): boolean {
@@ -206,5 +208,8 @@ installSessionHandling(apiClient, {
   getToken,
   onSessionExpired: signOutAndRedirect,
   refreshAccessToken,
-  setToken: (token) => localStorage.setItem('token', token),
+  setToken: (token) => {
+    localStorage.setItem('token', token);
+    notifySessionChanged();
+  },
 });

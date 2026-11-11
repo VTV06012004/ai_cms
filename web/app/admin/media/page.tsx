@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { apiClient, apiErrorMessage, apiUrl, mediaUrl } from '@/lib/api';
+import { useSession } from '@/lib/session';
 import type { MediaItem } from '@/app/components/MediaPicker';
 
 export default function MediaLibraryPage() {
@@ -13,7 +14,7 @@ export default function MediaLibraryPage() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
-  const [userRole, setUserRole] = useState('author');
+  const userRole = useSession().role;
 
   const canDelete = userRole === 'admin' || userRole === 'editor';
 
@@ -34,7 +35,6 @@ export default function MediaLibraryPage() {
   }, []);
 
   useEffect(() => {
-    setUserRole((localStorage.getItem('userRole') || 'author').toLowerCase());
     load(1);
   }, [load]);
 

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiClient, apiErrorStatus, apiUrl } from '@/lib/api';
+import { readSession } from '@/lib/session';
 
 interface User {
   id: number;
@@ -34,13 +35,13 @@ export default function AuditLogsPage() {
   useEffect(() => {
     const fetchAuditLogs = async () => {
       try {
-        const token = localStorage.getItem('token');
-        if (!token) {
+        const session = readSession();
+        if (!session.signedIn) {
           router.push('/login');
           return;
         }
 
-        if (localStorage.getItem('userRole') !== 'admin') {
+        if (session.role !== 'admin') {
           alert('Bạn không có quyền truy cập vào nhật ký hệ thống!');
           router.push('/posts');
           return;

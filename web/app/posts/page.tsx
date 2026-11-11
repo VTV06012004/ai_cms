@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiClient, apiErrorMessage, apiUrl, logout, mediaUrl } from '@/lib/api';
+import { useSession } from '@/lib/session';
 interface Category {
   id: number;
   name: string;
@@ -56,26 +57,18 @@ export default function PostsPage() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [previewPost, setPreviewPost] = useState<Post | null>(null);
   const router = useRouter();
+  const session = useSession();
+  const currentUser = useMemo<User | null>(
+    () =>
+      session.signedIn
+        ? { id: Number(session.userId || 0), email: session.email, name: session.name || undefined, role: session.role }
+        : null,
+    [session],
+  );
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const role = localStorage.getItem('userRole');
-    const userId = localStorage.getItem('userId');
-    const userName = localStorage.getItem('userName');
-    const userEmail = localStorage.getItem('userEmail');
-
-    if (token) {
-      setCurrentUser({
-        id: Number(userId || 0),
-        email: userEmail || 'user@cms.com',
-        name: userName || undefined,
-        role: role || 'author'
-      });
-    }
-
     const fetchData = async () => {
       try {
         const [postsRes, catRes] = await Promise.all([

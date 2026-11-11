@@ -1,29 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { logout } from '@/lib/api';
+import { useSession } from '@/lib/session';
 
 export default function AboutPage() {
-  const [currentUser, setCurrentUser] = useState<any>(null);
   const router = useRouter();
-
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    const role = localStorage.getItem('userRole');
-    const userId = localStorage.getItem('userId');
-    const userName = localStorage.getItem('userName');
-    const userEmail = localStorage.getItem('userEmail');
-
-    if (token) {
-      setCurrentUser({
-        id: Number(userId || 0),
-        email: userEmail || 'user@cms.com',
-        name: userName || undefined,
-        role: role || 'author'
-      });
-    }
-  }, []);
+  const session = useSession();
+  const currentUser = useMemo(
+    () =>
+      session.signedIn
+        ? { id: Number(session.userId || 0), email: session.email, name: session.name || undefined, role: session.role }
+        : null,
+    [session],
+  );
 
   const handleLogout = async () => {
     await logout();

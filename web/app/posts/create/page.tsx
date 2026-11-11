@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { apiClient, apiErrorMessage, apiUrl, mediaUrl } from '@/lib/api';
 import { draftKey as buildDraftKey, type PostDraft } from '@/lib/draft';
 import { removeMarkdownImage } from '@/lib/markdown';
+import { useSession } from '@/lib/session';
 import { useDraftAutosave } from '@/lib/useDraftAutosave';
 import MediaPicker from '@/app/components/MediaPicker';
 
@@ -32,14 +33,15 @@ export default function CreatePostPage() {
   // State quản lý Trạng thái bài viết và Phân quyền vai trò
   const [status, setStatus] = useState('draft');
   const [scheduledAt, setScheduledAt] = useState('');
-  const [userRole, setUserRole] = useState('author');
+  const session = useSession();
+  const userRole = session.role;
 
   // State cho Ảnh xem trước (Preview Image)
   const [previewImage, setPreviewImage] = useState<string>('');
   const [showMediaPicker, setShowMediaPicker] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [draftKey, setDraftKey] = useState<string | null>(null);
+  const draftKey = buildDraftKey(session.userId || null, 'new');
   const [dataReady, setDataReady] = useState(false);
   const router = useRouter();
 
@@ -61,15 +63,12 @@ export default function CreatePostPage() {
   const draft = useDraftAutosave({
     draftKey,
     form,
-    ready: dataReady && draftKey !== null,
+    ready: dataReady,
     apply: applyDraft,
   });
 
   // Gọi API lấy danh mục, tags và kiểm tra vai trò user khi load trang
   useEffect(() => {
-    const role = localStorage.getItem('userRole') || 'author';
-    setUserRole(role);
-    setDraftKey(buildDraftKey(localStorage.getItem('userId'), 'new'));
 
     const fetchData = async () => {
       try {
@@ -152,8 +151,7 @@ export default function CreatePostPage() {
     setLoading(true);
 
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
+      if (!session.signedIn) {
         router.push('/login');
         return;
       }

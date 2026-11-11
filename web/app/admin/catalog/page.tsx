@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { isAxiosError } from 'axios';
 import { apiClient, apiUrl } from '@/lib/api';
+import { readSession } from '@/lib/session';
 
 interface Category {
   id: number;
@@ -638,9 +639,8 @@ export default function CatalogAdminPage() {
   const [tab, setTab] = useState<Tab>('categories');
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const storedRole = (localStorage.getItem('userRole') || '').toLowerCase();
-    if (!token || (storedRole !== 'admin' && storedRole !== 'editor')) {
+    const { signedIn, role: storedRole } = readSession();
+    if (!signedIn || (storedRole !== 'admin' && storedRole !== 'editor')) {
       alert('Bạn không có quyền truy cập trang này!');
       router.push('/posts');
       return;
