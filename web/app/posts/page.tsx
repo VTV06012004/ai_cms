@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiClient, apiUrl, mediaUrl } from '@/lib/api';
+import { apiClient, apiUrl, logout, mediaUrl } from '@/lib/api';
 interface Category {
   id: number;
   name: string;
@@ -112,12 +112,8 @@ export default function PostsPage() {
     }
   };
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('userRole');
-    localStorage.removeItem('userId');
-    localStorage.removeItem('userName');
-    localStorage.removeItem('userEmail');
+  const handleLogout = async () => {
+    await logout();
     router.push('/login');
   };
 

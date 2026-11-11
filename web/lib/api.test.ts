@@ -132,6 +132,40 @@ describe('installSessionHandling', () => {
     expect(onSessionExpired).toHaveBeenCalledTimes(1);
   });
 
+  it('refreshes an expired access token and retries the failed request once', async () => {
+    const { client, seen } = newClient([{ status: 401 }, { status: 200 }]);
+    const refreshAccessToken = vi.fn().mockResolvedValue('fresh-token');
+    const setToken = vi.fn();
+    const onSessionExpired = vi.fn();
+    installSessionHandling(client, {
+      getToken: () => 'old-token',
+      onSessionExpired,
+      refreshAccessToken,
+      setToken,
+    });
+
+    await client.get(apiUrl('posts'));
+
+    expect(refreshAccessToken).toHaveBeenCalledTimes(1);
+    expect(setToken).toHaveBeenCalledWith('fresh-token');
+    expect(authHeader(seen[1])).toBe('Bearer fresh-token');
+    expect(onSessionExpired).not.toHaveBeenCalled();
+  });
+
+  it('signs the user out when refreshing an expired access token fails', async () => {
+    const { client } = newClient([{ status: 401 }]);
+    const onSessionExpired = vi.fn();
+    installSessionHandling(client, {
+      getToken: () => 'old-token',
+      onSessionExpired,
+      refreshAccessToken: vi.fn().mockRejectedValue(new Error('refresh failed')),
+    });
+
+    await expect(client.get(apiUrl('posts'))).rejects.toThrow();
+
+    expect(onSessionExpired).toHaveBeenCalledTimes(1);
+  });
+
   it('does not sign out on 401 when no token was sent', async () => {
     const { client } = newClient([{ status: 401 }]);
     const onSessionExpired = vi.fn();

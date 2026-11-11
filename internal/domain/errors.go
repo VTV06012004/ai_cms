@@ -20,6 +20,7 @@ var (
 	ErrPostNotFound            = errors.New("không tìm thấy bài viết")
 	ErrRevisionNotFound        = errors.New("không tìm thấy phiên bản bài viết")
 	ErrUserNotFound            = errors.New("không tìm thấy người dùng")
+	ErrInvalidRefreshToken     = errors.New("refresh token không hợp lệ hoặc đã hết hạn")
 	ErrMenuNotFound            = errors.New("không tìm thấy menu")
 	ErrEmailAlreadyExists      = errors.New("email đã tồn tại")
 	ErrCategoryAlreadyExists   = errors.New("danh mục hoặc slug đã tồn tại")

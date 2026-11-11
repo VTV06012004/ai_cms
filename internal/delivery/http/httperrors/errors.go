@@ -37,6 +37,7 @@ type errorRule struct {
 
 var errorRules = []errorRule{
 	{usecase.ErrInvalidCredentials, http.StatusUnauthorized},
+	{usecase.ErrInvalidRefreshToken, http.StatusUnauthorized},
 	{ErrMissingUserIdentity, http.StatusUnauthorized},
 	{ErrMissingRoleIdentity, http.StatusForbidden},
 	{ErrAuthRateLimitExceeded, http.StatusTooManyRequests},

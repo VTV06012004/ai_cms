@@ -12,6 +12,7 @@ import (
 )
 
 var ErrInvalidCredentials = errors.New("email hoặc mật khẩu không chính xác")
+var ErrInvalidRefreshToken = domain.ErrInvalidRefreshToken
 
 type CredentialService interface {
 	HashPassword(password string) (string, error)

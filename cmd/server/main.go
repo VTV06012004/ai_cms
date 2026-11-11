@@ -65,6 +65,7 @@ func run() error {
 	}
 
 	userRepo := persistence.NewUserRepository(db)
+	refreshTokenRepo := persistence.NewRefreshTokenRepository(db)
 	postRepo := persistence.NewPostRepository(db)
 	categoryRepo := persistence.NewCategoryRepository(db)
 	tagRepo := persistence.NewTagRepository(db)
@@ -73,6 +74,7 @@ func run() error {
 	auditRepo := persistence.NewAuditRepository(db)
 	unitOfWork := persistence.NewUnitOfWork(db)
 	userUC := usecase.NewUserUseCase(userRepo, credentials, unitOfWork)
+	sessionUC := usecase.NewSessionUseCase(userRepo, refreshTokenRepo, credentials)
 	if err := userUC.EnsureInitialAdmin(context.Background(), usecase.InitialAdminConfig{
 		Name:     cfg.InitialAdmin.Name,
 		Email:    cfg.InitialAdmin.Email,
@@ -95,7 +97,7 @@ func run() error {
 	delivery.RegisterRoutes(
 		router,
 		credentials,
-		delivery.NewAuthHandler(userUC),
+		delivery.NewAuthHandler(userUC, sessionUC, cfg.CORSAllowedOrigins, cfg.AuthCookieSecure),
 		delivery.NewPostHandler(postUC),
 		delivery.NewCategoryHandler(categoryUC),
 		delivery.NewTagHandler(tagUC),

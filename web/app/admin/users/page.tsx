@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiClient, apiUrl } from '@/lib/api';
+import { apiClient, apiUrl, logout } from '@/lib/api';
 
 interface User {
   id: number;
@@ -110,8 +110,8 @@ export default function AdminUsersPage() {
               ← Quay lại Bài viết
             </button>
             <button
-              onClick={() => {
-                localStorage.clear();
+              onClick={async () => {
+                await logout();
                 router.push('/login');
               }}
               className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 text-sm font-semibold rounded-lg transition cursor-pointer"

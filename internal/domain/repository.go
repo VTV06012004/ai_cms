@@ -21,6 +21,12 @@ type UserRepository interface {
 	UpdatePasswordHash(ctx context.Context, userID uint, passwordHash string) error
 }
 
+type RefreshTokenRepository interface {
+	Create(ctx context.Context, userID uint, tokenHash string, expiresAt time.Time) error
+	Rotate(ctx context.Context, oldHash, newHash string, now, expiresAt time.Time) (uint, error)
+	Revoke(ctx context.Context, tokenHash string) error
+}
+
 type PostRepository interface {
 	GetAll(ctx context.Context, criteria PostListCriteria, page PageRequest) ([]Post, int64, error)
 	GetByID(ctx context.Context, id uint) (*Post, error)
