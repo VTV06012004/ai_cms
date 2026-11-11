@@ -30,7 +30,7 @@ func (r categoryRequest) toInput() usecase.CategoryInputDTO {
 }
 
 func (h *CategoryHandler) GetAll(c *gin.Context) {
-	categories, err := h.useCase.GetAllCategories()
+	categories, err := h.useCase.GetAllCategories(c.Request.Context())
 	if err != nil {
 		writeError(c, err)
 		return
@@ -48,7 +48,7 @@ func (h *CategoryHandler) Create(c *gin.Context) {
 		writeInvalidRequest(c)
 		return
 	}
-	category, err := h.useCase.CreateCategory(currentUserID(c), request.toInput(), c.ClientIP())
+	category, err := h.useCase.CreateCategory(c.Request.Context(), currentUserID(c), request.toInput(), c.ClientIP())
 	if err != nil {
 		writeError(c, err)
 		return
@@ -66,7 +66,7 @@ func (h *CategoryHandler) Update(c *gin.Context) {
 		writeInvalidRequest(c)
 		return
 	}
-	category, err := h.useCase.UpdateCategory(currentUserID(c), id, request.toInput(), c.ClientIP())
+	category, err := h.useCase.UpdateCategory(c.Request.Context(), currentUserID(c), id, request.toInput(), c.ClientIP())
 	if err != nil {
 		writeError(c, err)
 		return
@@ -79,7 +79,7 @@ func (h *CategoryHandler) Delete(c *gin.Context) {
 	if !ok {
 		return
 	}
-	if err := h.useCase.DeleteCategory(currentUserID(c), id, c.ClientIP()); err != nil {
+	if err := h.useCase.DeleteCategory(c.Request.Context(), currentUserID(c), id, c.ClientIP()); err != nil {
 		writeError(c, err)
 		return
 	}
