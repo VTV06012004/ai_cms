@@ -29,6 +29,7 @@ type AuthHandler struct {
 	userUseCase    loginService
 	sessionUseCase sessionService
 	rateLimiter    *authRateLimiter
+	sessionLimiter *authRateLimiter
 	allowedOrigins map[string]struct{}
 	cookieSecure   bool
 }
@@ -40,6 +41,7 @@ func NewAuthHandler(uc loginService, sessions sessionService, allowedOrigins []s
 	}
 	return &AuthHandler{
 		userUseCase: uc, sessionUseCase: sessions, rateLimiter: newAuthRateLimiter(),
+		sessionLimiter: newRateLimiter(sessionRateLimit),
 		allowedOrigins: origins, cookieSecure: cookieSecure,
 	}
 }
@@ -47,6 +49,18 @@ func NewAuthHandler(uc loginService, sessions sessionService, allowedOrigins []s
 func (h *AuthHandler) RateLimitIP() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if !h.rateLimiter.allowIP(c.ClientIP(), time.Now()) {
+			writeError(c, errAuthRateLimitExceeded)
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+// RateLimitSession giới hạn riêng cho làm mới phiên và đăng xuất, nới hơn đăng nhập.
+func (h *AuthHandler) RateLimitSession() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !h.sessionLimiter.allowIP(c.ClientIP(), time.Now()) {
 			writeError(c, errAuthRateLimitExceeded)
 			c.Abort()
 			return
