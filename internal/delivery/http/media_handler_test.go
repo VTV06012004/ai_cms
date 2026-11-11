@@ -16,8 +16,8 @@ import (
 	"testing"
 	"time"
 
-	"api/internal/domain"
-	"api/internal/usecase"
+	"github.com/VTV06012004/ai_cms/internal/domain"
+	"github.com/VTV06012004/ai_cms/internal/usecase"
 
 	"github.com/gin-gonic/gin"
 )

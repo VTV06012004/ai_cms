@@ -1,8 +1,8 @@
 package usecase
 
 import (
-	"api/internal/domain"
 	"context"
+	"github.com/VTV06012004/ai_cms/internal/domain"
 	"sync"
 	"testing"
 	"time"

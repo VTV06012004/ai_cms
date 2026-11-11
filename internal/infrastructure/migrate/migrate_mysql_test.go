@@ -11,7 +11,7 @@ import (
 
 	mysqlDriver "github.com/go-sql-driver/mysql"
 
-	sqlfiles "api/migrations"
+	sqlfiles "github.com/VTV06012004/ai_cms/migrations"
 )
 
 // newIsolatedMySQL tạo một database riêng cho từng test và xóa đi khi test xong.

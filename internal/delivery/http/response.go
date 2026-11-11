@@ -3,7 +3,7 @@ package http
 import (
 	"time"
 
-	"api/internal/domain"
+	"github.com/VTV06012004/ai_cms/internal/domain"
 )
 
 type userResponse struct {

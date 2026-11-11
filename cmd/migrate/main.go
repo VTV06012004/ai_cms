@@ -15,8 +15,8 @@ import (
 	"os"
 	"time"
 
-	"api/internal/infrastructure/migrate"
-	sqlfiles "api/migrations"
+	"github.com/VTV06012004/ai_cms/internal/infrastructure/migrate"
+	sqlfiles "github.com/VTV06012004/ai_cms/migrations"
 )
 
 func main() {

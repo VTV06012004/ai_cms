@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"api/internal/domain"
+	"github.com/VTV06012004/ai_cms/internal/domain"
 )
 
 var ErrInvalidCredentials = errors.New("email hoặc mật khẩu không chính xác")

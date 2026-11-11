@@ -1,7 +1,7 @@
 package http
 
 import (
-	"api/internal/usecase"
+	"github.com/VTV06012004/ai_cms/internal/usecase"
 	"net/http"
 
 	"github.com/gin-gonic/gin"

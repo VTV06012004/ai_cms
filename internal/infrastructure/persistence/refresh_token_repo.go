@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"api/internal/domain"
+	"github.com/VTV06012004/ai_cms/internal/domain"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"

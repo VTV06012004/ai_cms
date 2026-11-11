@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"api/internal/usecase"
+	"github.com/VTV06012004/ai_cms/internal/usecase"
 )
 
 func TestRefreshTokenRotationIsSingleUse(t *testing.T) {
