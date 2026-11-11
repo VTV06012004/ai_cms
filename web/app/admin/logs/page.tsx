@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiClient, apiUrl } from '@/lib/api';
+import { apiClient, apiErrorStatus, apiUrl } from '@/lib/api';
 
 interface User {
   id: number;
@@ -52,9 +52,9 @@ export default function AuditLogsPage() {
 
         setLogs(res.data.data || []);
         setTotalPages(res.data.pagination?.total_pages ?? 1);
-      } catch (err: any) {
+      } catch (err) {
         console.error('Lỗi lấy danh sách Audit Logs:', err);
-        if (err.response?.status === 403) {
+        if (apiErrorStatus(err) === 403) {
           setError('Bạn không có quyền xem nhật ký hệ thống.');
         } else {
           setError('Không thể tải nhật ký hệ thống. Vui lòng thử lại sau.');

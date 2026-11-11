@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { isAxiosError } from 'axios';
-import { apiClient, apiUrl, mediaUrl } from '@/lib/api';
+import { apiClient, apiErrorMessage, apiUrl, mediaUrl } from '@/lib/api';
 import { draftKey as buildDraftKey, type PostDraft } from '@/lib/draft';
 import { removeMarkdownImage } from '@/lib/markdown';
 import { useDraftAutosave } from '@/lib/useDraftAutosave';
@@ -127,8 +126,7 @@ export default function CreatePostPage() {
       alert('Upload ảnh thành công và đã chèn vào nội dung!');
     } catch (err) {
       console.error('Lỗi upload ảnh:', err);
-      const message = isAxiosError(err) ? err.response?.data?.error : undefined;
-      alert(message || 'Upload ảnh thất bại!');
+      alert(apiErrorMessage(err, 'Upload ảnh thất bại!'));
     }
   };
 
@@ -178,9 +176,9 @@ export default function CreatePostPage() {
 
       draft.markSaved();
       router.push('/posts');
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setError(err.response?.data?.error || err.response?.data?.message || 'Có lỗi xảy ra khi tạo bài viết.');
+      setError(apiErrorMessage(err, 'Có lỗi xảy ra khi tạo bài viết.'));
     } finally {
       setLoading(false);
     }

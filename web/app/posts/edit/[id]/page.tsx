@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { isAxiosError } from 'axios';
-import { apiClient, apiUrl, mediaUrl } from '@/lib/api';
+import { apiClient, apiErrorMessage, apiUrl, mediaUrl } from '@/lib/api';
 import { draftKey as buildDraftKey, type PostDraft } from '@/lib/draft';
 import { removeMarkdownImage } from '@/lib/markdown';
 import { useDraftAutosave } from '@/lib/useDraftAutosave';
@@ -144,7 +143,7 @@ function EditPostForm() {
           }
 
           const postTags = post.tags || post.Tags || [];
-          setSelectedTags(postTags.map((t: any) => t.id || t.ID));
+          setSelectedTags(postTags.map((t: { id?: number; ID?: number }) => t.id || t.ID));
         }
 
         fetchRevisions();
@@ -177,8 +176,7 @@ function EditPostForm() {
       alert('Upload ảnh thành công và đã chèn vào nội dung!');
     } catch (err) {
       console.error('Lỗi upload ảnh:', err);
-      const message = isAxiosError(err) ? err.response?.data?.error : undefined;
-      alert(message || 'Upload ảnh thất bại!');
+      alert(apiErrorMessage(err, 'Upload ảnh thất bại!'));
     }
   };
 
@@ -216,9 +214,9 @@ function EditPostForm() {
       draft.markSaved();
       alert('Cập nhật bài viết thành công!');
       router.push('/posts'); 
-    } catch (err: any) {
+    } catch (err) {
       console.error('Lỗi cập nhật:', err);
-      alert(err.response?.data?.error || 'Cập nhật thất bại!');
+      alert(apiErrorMessage(err, 'Cập nhật thất bại!'));
     } finally {
       setLoading(false);
     }
@@ -251,8 +249,7 @@ function EditPostForm() {
       });
       setComparison(res.data.data);
     } catch (err) {
-      const message = isAxiosError(err) ? err.response?.data?.error : undefined;
-      alert(message || 'Không thể so sánh các phiên bản');
+      alert(apiErrorMessage(err, 'Không thể so sánh các phiên bản'));
     } finally {
       setComparing(false);
     }
@@ -291,9 +288,9 @@ function EditPostForm() {
 
       alert('Khôi phục phiên bản thành công!');
       fetchRevisions();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Lỗi khôi phục:', err);
-      alert(err.response?.data?.error || 'Khôi phục phiên bản thất bại!');
+      alert(apiErrorMessage(err, 'Khôi phục phiên bản thất bại!'));
     } finally {
       setRestoringId(null);
     }

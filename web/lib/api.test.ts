@@ -5,7 +5,16 @@ import axios, {
   type InternalAxiosRequestConfig,
 } from 'axios';
 import { describe, expect, it, vi } from 'vitest';
-import { API_BASE_URL, apiClient, apiUrl, installSessionHandling, logout, mediaUrl } from './api';
+import {
+  API_BASE_URL,
+  apiClient,
+  apiErrorMessage,
+  apiErrorStatus,
+  apiUrl,
+  installSessionHandling,
+  logout,
+  mediaUrl,
+} from './api';
 
 type Reply = { status: number };
 
@@ -253,5 +262,33 @@ describe('logout', () => {
 
     expect(localStorage.getItem('token')).toBeNull();
     expect(localStorage.getItem('cms.draft.post.3.7')).toBeNull();
+  });
+});
+
+describe('apiErrorMessage and apiErrorStatus', () => {
+  function axiosError(status: number, data: unknown) {
+    return new axios.AxiosError('fail', 'ERR', undefined, undefined, {
+      status,
+      data,
+    } as never);
+  }
+
+  it('prefers the error field of the response body', () => {
+    expect(apiErrorMessage(axiosError(400, { error: 'sai' }), 'dự phòng')).toBe('sai');
+  });
+
+  it('falls back to the message field', () => {
+    expect(apiErrorMessage(axiosError(400, { message: 'ghi chú' }), 'dự phòng')).toBe('ghi chú');
+  });
+
+  it('uses the fallback for empty bodies and non-axios errors', () => {
+    expect(apiErrorMessage(axiosError(500, {}), 'dự phòng')).toBe('dự phòng');
+    expect(apiErrorMessage(new Error('x'), 'dự phòng')).toBe('dự phòng');
+    expect(apiErrorMessage(undefined, 'dự phòng')).toBe('dự phòng');
+  });
+
+  it('reads the status only from axios errors', () => {
+    expect(apiErrorStatus(axiosError(403, {}))).toBe(403);
+    expect(apiErrorStatus(new Error('x'))).toBeUndefined();
   });
 });

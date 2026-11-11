@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiClient, apiUrl, logout, mediaUrl } from '@/lib/api';
+import { apiClient, apiErrorMessage, apiUrl, logout, mediaUrl } from '@/lib/api';
 interface Category {
   id: number;
   name: string;
@@ -125,8 +125,8 @@ export default function PostsPage() {
       await apiClient.delete(apiUrl(`posts/${id}`));
 
       setPosts(posts.filter((p) => p.id !== id));
-    } catch (err: any) {
-      alert(err.response?.data?.error || 'Xóa bài viết thất bại!');
+    } catch (err) {
+      alert(apiErrorMessage(err, 'Xóa bài viết thất bại!'));
     }
   };
 
@@ -153,8 +153,8 @@ export default function PostsPage() {
       setPosts((prev) =>
         prev.map((p) => (p.id === postId ? { ...p, status: newStatus, rejection_reason } : p))
       );
-    } catch (err: any) {
-      alert(err.response?.data?.error || 'Thao tác kiểm duyệt thất bại!');
+    } catch (err) {
+      alert(apiErrorMessage(err, 'Thao tác kiểm duyệt thất bại!'));
     }
   };
 

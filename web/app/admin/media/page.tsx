@@ -2,8 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { isAxiosError } from 'axios';
-import { apiClient, apiUrl, mediaUrl } from '@/lib/api';
+import { apiClient, apiErrorMessage, apiUrl, mediaUrl } from '@/lib/api';
 import type { MediaItem } from '@/app/components/MediaPicker';
 
 export default function MediaLibraryPage() {
@@ -49,8 +48,7 @@ export default function MediaLibraryPage() {
       await apiClient.post(apiUrl('upload'), formData);
       await load(1);
     } catch (err) {
-      const message = isAxiosError(err) ? err.response?.data?.error : undefined;
-      alert(message || 'Upload ảnh thất bại!');
+      alert(apiErrorMessage(err, 'Upload ảnh thất bại!'));
     } finally {
       setUploading(false);
       e.target.value = '';
@@ -64,8 +62,7 @@ export default function MediaLibraryPage() {
       setItems((prev: MediaItem[]) => prev.filter((i) => i.name !== item.name));
       setTotal((n) => Math.max(0, n - 1));
     } catch (err) {
-      const message = isAxiosError(err) ? err.response?.data?.error : undefined;
-      alert(message || 'Xóa ảnh thất bại!');
+      alert(apiErrorMessage(err, 'Xóa ảnh thất bại!'));
     }
   };
 

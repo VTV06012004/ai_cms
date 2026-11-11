@@ -1,4 +1,4 @@
-import axios, { type AxiosInstance } from "axios";
+import axios, { isAxiosError, type AxiosInstance } from "axios";
 import { clearAllDrafts } from "./draft";
 
 const defaultApiBaseUrl = "http://localhost:8081/api";
@@ -18,6 +18,23 @@ export function mediaUrl(path: string): string {
 
   const apiOrigin = new URL(API_BASE_URL).origin;
   return new URL(path, `${apiOrigin}/`).toString();
+}
+
+type ErrorBody = { error?: unknown; message?: unknown };
+
+// Message the API put in an error response, or the fallback for anything else.
+export function apiErrorMessage(err: unknown, fallback: string): string {
+  if (isAxiosError(err)) {
+    const body = err.response?.data as ErrorBody | undefined;
+    for (const value of [body?.error, body?.message]) {
+      if (typeof value === "string" && value !== "") return value;
+    }
+  }
+  return fallback;
+}
+
+export function apiErrorStatus(err: unknown): number | undefined {
+  return isAxiosError(err) ? err.response?.status : undefined;
 }
 
 const SESSION_KEYS = ["token", "userRole", "userId", "userName", "userEmail"];

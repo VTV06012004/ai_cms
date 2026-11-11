@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { apiClient, apiUrl, logout } from '@/lib/api';
+import { apiClient, apiErrorMessage, apiUrl, logout } from '@/lib/api';
 
 interface User {
   id: number;
@@ -42,7 +42,7 @@ export default function AdminUsersPage() {
         });
         setUsers(res.data.data || []);
         setTotalPages(res.data.pagination?.total_pages ?? 1);
-      } catch (err: any) {
+      } catch (err) {
         console.error('Lỗi tải danh sách user:', err);
       } finally {
         setLoading(false);
@@ -86,8 +86,8 @@ export default function AdminUsersPage() {
         prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u))
       );
       alert('Cập nhật quyền thành công!');
-    } catch (err: any) {
-      alert(err.response?.data?.error || 'Cập nhật quyền thất bại!');
+    } catch (err) {
+      alert(apiErrorMessage(err, 'Cập nhật quyền thất bại!'));
     } finally {
       setUpdatingId(null);
     }

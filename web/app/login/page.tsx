@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { apiClient, apiUrl } from '@/lib/api';
+import { apiClient, apiErrorMessage, apiUrl } from '@/lib/api';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -35,9 +35,9 @@ export default function LoginPage() {
 
       // Chuyển hướng về trang quản lý bài viết
       router.push('/posts');
-    } catch (err: any) {
+    } catch (err) {
       console.error('Lỗi đăng nhập:', err);
-      setError(err.response?.data?.error || 'Email hoặc mật khẩu không chính xác!');
+      setError(apiErrorMessage(err, 'Email hoặc mật khẩu không chính xác!'));
     } finally {
       setLoading(false);
     }

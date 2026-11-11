@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import { AxiosError } from 'axios';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiClient, apiUrl } from '@/lib/api';
@@ -6,6 +7,13 @@ import { draftKey } from '@/lib/draft';
 import EditPostPage from './page';
 
 const push = vi.fn();
+
+function apiError(message: string) {
+  return new AxiosError('Request failed', 'ERR_BAD_REQUEST', undefined, undefined, {
+    status: 400,
+    data: { error: message },
+  } as never);
+}
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
@@ -124,9 +132,9 @@ describe('edit post form', () => {
 
   it('shows the API error and stays on the page when saving fails', async () => {
     await openPage('author', basePost);
-    vi.mocked(apiClient.put).mockRejectedValue({
-      response: { data: { error: 'vai trò hiện tại không có quyền xuất bản bài viết' } },
-    });
+    vi.mocked(apiClient.put).mockRejectedValue(
+      apiError('vai trò hiện tại không có quyền xuất bản bài viết'),
+    );
 
     await userEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
 
@@ -209,7 +217,7 @@ describe('edit post draft recovery (M6)', () => {
     storeDraft();
     await openPage('author', basePost);
     await userEvent.click(await screen.findByRole('button', { name: 'Khôi phục bản nháp' }));
-    vi.mocked(apiClient.put).mockRejectedValue({ response: { data: { error: 'lỗi' } } });
+    vi.mocked(apiClient.put).mockRejectedValue(apiError('lỗi'));
 
     await userEvent.click(screen.getByRole('button', { name: 'Lưu thay đổi' }));
 
