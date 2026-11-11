@@ -83,6 +83,7 @@ var errorRules = []errorRule{
 	{domain.ErrRevisionPostMismatch, http.StatusBadRequest},
 	{domain.ErrCategoryNotFound, http.StatusNotFound},
 	{domain.ErrTagNotFound, http.StatusNotFound},
+	{domain.ErrPostTagsNotFound, http.StatusBadRequest},
 	{domain.ErrCategoryInUse, http.StatusConflict},
 	{domain.ErrCategoryHasChildren, http.StatusConflict},
 	{domain.ErrTagAlreadyExists, http.StatusConflict},
