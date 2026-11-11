@@ -1,11 +1,11 @@
 package usecase
 
 import (
-	"api/internal/domain"
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"github.com/VTV06012004/ai_cms/internal/domain"
 	"image"
 	_ "image/gif"
 	_ "image/jpeg"

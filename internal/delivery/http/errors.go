@@ -1,7 +1,7 @@
 package http
 
 import (
-	"api/internal/delivery/http/httperrors"
+	"github.com/VTV06012004/ai_cms/internal/delivery/http/httperrors"
 
 	"github.com/gin-gonic/gin"
 )

@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 
-	"api/internal/domain"
+	"github.com/VTV06012004/ai_cms/internal/domain"
 
 	"github.com/gin-gonic/gin"
 )

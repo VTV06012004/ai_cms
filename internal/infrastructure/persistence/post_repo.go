@@ -1,10 +1,10 @@
 package persistence
 
 import (
-	"api/internal/domain"
 	"context"
 	"errors"
 	"fmt"
+	"github.com/VTV06012004/ai_cms/internal/domain"
 	"strings"
 	"time"
 

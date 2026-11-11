@@ -1,8 +1,8 @@
 package http
 
 import (
-	"api/internal/delivery/http/middleware"
-	"api/internal/infrastructure/security"
+	"github.com/VTV06012004/ai_cms/internal/delivery/http/middleware"
+	"github.com/VTV06012004/ai_cms/internal/infrastructure/security"
 
 	"net/http"
 

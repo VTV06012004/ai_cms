@@ -10,7 +10,7 @@ import (
 	"fmt"
 	"time"
 
-	"api/internal/domain"
+	"github.com/VTV06012004/ai_cms/internal/domain"
 )
 
 const RefreshTokenLifetime = 7 * 24 * time.Hour

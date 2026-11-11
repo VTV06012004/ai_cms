@@ -1,9 +1,9 @@
 package usecase
 
 import (
-	"api/internal/domain"
 	"context"
 	"fmt"
+	"github.com/VTV06012004/ai_cms/internal/domain"
 	"time"
 )
 

@@ -1,11 +1,11 @@
 package usecase
 
 import (
-	"api/internal/domain"
 	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
+	"github.com/VTV06012004/ai_cms/internal/domain"
 	"image"
 	"image/color"
 	"image/gif"

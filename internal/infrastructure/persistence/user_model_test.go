@@ -3,7 +3,7 @@ package persistence
 import (
 	"testing"
 
-	"api/internal/domain"
+	"github.com/VTV06012004/ai_cms/internal/domain"
 )
 
 func TestUserModelPreservesRootAdminIdentity(t *testing.T) {

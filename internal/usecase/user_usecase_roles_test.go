@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"api/internal/domain"
+	"github.com/VTV06012004/ai_cms/internal/domain"
 )
 
 // newUsersWithTwoAccounts tạo hai tài khoản: ID 1 (admin@) và ID 2 (author@),

@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"api/internal/delivery/http/middleware"
-	"api/internal/domain"
-	"api/internal/infrastructure/security"
+	"github.com/VTV06012004/ai_cms/internal/delivery/http/middleware"
+	"github.com/VTV06012004/ai_cms/internal/domain"
+	"github.com/VTV06012004/ai_cms/internal/infrastructure/security"
 
 	"github.com/gin-gonic/gin"
 )

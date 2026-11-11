@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"api/internal/domain"
+	"github.com/VTV06012004/ai_cms/internal/domain"
 )
 
 const maxCategoryDepth = 50

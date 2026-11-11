@@ -1,4 +1,4 @@
-module api
+module github.com/VTV06012004/ai_cms
 
 go 1.23
 

@@ -1,8 +1,8 @@
 package persistence
 
 import (
-	"api/internal/usecase"
 	"context"
+	"github.com/VTV06012004/ai_cms/internal/usecase"
 
 	"gorm.io/gorm"
 )

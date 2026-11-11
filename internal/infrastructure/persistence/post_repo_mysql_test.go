@@ -14,9 +14,9 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
-	"api/internal/domain"
-	"api/internal/infrastructure/migrate"
-	sqlfiles "api/migrations"
+	"github.com/VTV06012004/ai_cms/internal/domain"
+	"github.com/VTV06012004/ai_cms/internal/infrastructure/migrate"
+	sqlfiles "github.com/VTV06012004/ai_cms/migrations"
 )
 
 func newPostSlugMySQLTestDB(t *testing.T) (*gorm.DB, uint, uint) {
