@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { isAxiosError } from 'axios';
-import { apiClient, apiUrl, mediaUrl } from '@/lib/api';
+import { apiClient, apiErrorMessage, apiUrl, mediaUrl } from '@/lib/api';
+import { draftKey as buildDraftKey, type PostDraft } from '@/lib/draft';
 import { removeMarkdownImage } from '@/lib/markdown';
+import { useSession } from '@/lib/session';
+import { useDraftAutosave } from '@/lib/useDraftAutosave';
 import MediaPicker from '@/app/components/MediaPicker';
 
 interface Category {
@@ -50,7 +52,8 @@ function EditPostForm() {
   const [scheduledAt, setScheduledAt] = useState('');
   const [categoryId, setCategoryId] = useState<number | ''>('');
   
-  const [userRole, setUserRole] = useState('author');
+  const session = useSession();
+  const userRole = session.role;
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -71,6 +74,29 @@ function EditPostForm() {
   const params = useParams();
   const { id } = params;
 
+  const draftKey = buildDraftKey(session.userId || null, String(id));
+  const form = useMemo<PostDraft>(
+    () => ({ title, slug, content, status, scheduledAt, categoryId, selectedTags }),
+    [title, slug, content, status, scheduledAt, categoryId, selectedTags],
+  );
+  const applyDraft = useCallback((draft: PostDraft) => {
+    setTitle(draft.title);
+    setSlug(draft.slug);
+    setContent(draft.content);
+    setStatus(draft.status);
+    setScheduledAt(draft.scheduledAt);
+    setCategoryId(draft.categoryId);
+    setSelectedTags(draft.selectedTags);
+    const imageMatch = draft.content.match(/!\[.*?\]\((.*?)\)/);
+    setPreviewImage(imageMatch && imageMatch[1] ? mediaUrl(imageMatch[1]) : '');
+  }, []);
+  const draft = useDraftAutosave({
+    draftKey,
+    form,
+    ready: !loading,
+    apply: applyDraft,
+  });
+
   const fetchRevisions = async () => {
     try {
       const res = await apiClient.get(apiUrl(`posts-revisions/${id}`));
@@ -81,8 +107,6 @@ function EditPostForm() {
   };
 
   useEffect(() => {
-    const role = localStorage.getItem('userRole') || 'author';
-    setUserRole(role);
 
     const fetchData = async () => {
       try {
@@ -118,7 +142,7 @@ function EditPostForm() {
           }
 
           const postTags = post.tags || post.Tags || [];
-          setSelectedTags(postTags.map((t: any) => t.id || t.ID));
+          setSelectedTags(postTags.map((t: { id?: number; ID?: number }) => t.id || t.ID));
         }
 
         fetchRevisions();
@@ -151,8 +175,7 @@ function EditPostForm() {
       alert('Upload ảnh thành công và đã chèn vào nội dung!');
     } catch (err) {
       console.error('Lỗi upload ảnh:', err);
-      const message = isAxiosError(err) ? err.response?.data?.error : undefined;
-      alert(message || 'Upload ảnh thất bại!');
+      alert(apiErrorMessage(err, 'Upload ảnh thất bại!'));
     }
   };
 
@@ -187,11 +210,12 @@ function EditPostForm() {
         }
       );
 
+      draft.markSaved();
       alert('Cập nhật bài viết thành công!');
       router.push('/posts'); 
-    } catch (err: any) {
+    } catch (err) {
       console.error('Lỗi cập nhật:', err);
-      alert(err.response?.data?.error || 'Cập nhật thất bại!');
+      alert(apiErrorMessage(err, 'Cập nhật thất bại!'));
     } finally {
       setLoading(false);
     }
@@ -224,8 +248,7 @@ function EditPostForm() {
       });
       setComparison(res.data.data);
     } catch (err) {
-      const message = isAxiosError(err) ? err.response?.data?.error : undefined;
-      alert(message || 'Không thể so sánh các phiên bản');
+      alert(apiErrorMessage(err, 'Không thể so sánh các phiên bản'));
     } finally {
       setComparing(false);
     }
@@ -264,9 +287,9 @@ function EditPostForm() {
 
       alert('Khôi phục phiên bản thành công!');
       fetchRevisions();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Lỗi khôi phục:', err);
-      alert(err.response?.data?.error || 'Khôi phục phiên bản thất bại!');
+      alert(apiErrorMessage(err, 'Khôi phục phiên bản thất bại!'));
     } finally {
       setRestoringId(null);
     }
@@ -275,7 +298,32 @@ function EditPostForm() {
   return (
     <div className="max-w-4xl mx-auto mt-10 p-6 bg-white rounded-lg shadow-md text-black relative">
       <h1 className="text-2xl font-bold mb-6">Chỉnh sửa Bài viết (ID: {id})</h1>
-      
+
+      {draft.pending && (
+        <div className="mb-4 p-3 bg-amber-50 border border-amber-300 rounded-md text-sm text-amber-900">
+          <p>
+            Có bản nháp chưa lưu từ {new Date(draft.pending.savedAt).toLocaleString('vi-VN')}.
+            Khôi phục để tiếp tục chỉnh sửa, hoặc bỏ để dùng bản đã lưu trên máy chủ.
+          </p>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              onClick={draft.restore}
+              className="px-3 py-1 bg-amber-600 text-white rounded hover:bg-amber-700"
+            >
+              Khôi phục bản nháp
+            </button>
+            <button
+              type="button"
+              onClick={draft.discard}
+              className="px-3 py-1 bg-white border border-amber-400 rounded hover:bg-amber-100"
+            >
+              Bỏ bản nháp
+            </button>
+          </div>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="block text-sm font-medium mb-1">Tiêu đề</label>

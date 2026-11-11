@@ -1,4 +1,6 @@
-import axios, { type AxiosInstance } from "axios";
+import axios, { isAxiosError, type AxiosInstance } from "axios";
+import { clearAllDrafts } from "./draft";
+import { notifySessionChanged } from "./session";
 
 const defaultApiBaseUrl = "http://localhost:8081/api";
 
@@ -19,6 +21,23 @@ export function mediaUrl(path: string): string {
   return new URL(path, `${apiOrigin}/`).toString();
 }
 
+type ErrorBody = { error?: unknown; message?: unknown };
+
+// Message the API put in an error response, or the fallback for anything else.
+export function apiErrorMessage(err: unknown, fallback: string): string {
+  if (isAxiosError(err)) {
+    const body = err.response?.data as ErrorBody | undefined;
+    for (const value of [body?.error, body?.message]) {
+      if (typeof value === "string" && value !== "") return value;
+    }
+  }
+  return fallback;
+}
+
+export function apiErrorStatus(err: unknown): number | undefined {
+  return isAxiosError(err) ? err.response?.status : undefined;
+}
+
 const SESSION_KEYS = ["token", "userRole", "userId", "userName", "userEmail"];
 const LOGIN_PATH = "/login";
 
@@ -36,6 +55,7 @@ export function clearSession(): void {
   } catch {
     // Storage can be unavailable (private mode); nothing to clear then.
   }
+  notifySessionChanged();
 }
 
 function isApiRequest(url?: string): boolean {
@@ -179,6 +199,8 @@ export async function logout(): Promise<void> {
     console.error('Không thể thu hồi phiên đăng nhập trên máy chủ:', error);
   } finally {
     clearSession();
+    // Đăng xuất chủ động mới xóa bản nháp; phiên hết hạn (401) thì giữ lại để khôi phục.
+    clearAllDrafts();
   }
 }
 
@@ -186,5 +208,8 @@ installSessionHandling(apiClient, {
   getToken,
   onSessionExpired: signOutAndRedirect,
   refreshAccessToken,
-  setToken: (token) => localStorage.setItem('token', token),
+  setToken: (token) => {
+    localStorage.setItem('token', token);
+    notifySessionChanged();
+  },
 });

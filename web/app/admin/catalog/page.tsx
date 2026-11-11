@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { isAxiosError } from 'axios';
 import { apiClient, apiUrl } from '@/lib/api';
+import { readSession } from '@/lib/session';
 
 interface Category {
   id: number;
@@ -94,6 +95,8 @@ function CategoriesPanel() {
   }, []);
 
   useEffect(() => {
+    // Tải dữ liệu khi vào trang; load() đặt trạng thái loading đồng bộ.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
 
@@ -278,6 +281,8 @@ function TagsPanel() {
   }, []);
 
   useEffect(() => {
+    // Tải dữ liệu khi vào trang; load() đặt trạng thái loading đồng bộ.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
 
@@ -412,6 +417,8 @@ function MenusPanel() {
   }, []);
 
   useEffect(() => {
+    // Tải dữ liệu khi vào trang; load() đặt trạng thái loading đồng bộ.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
   }, [load]);
 
@@ -638,13 +645,14 @@ export default function CatalogAdminPage() {
   const [tab, setTab] = useState<Tab>('categories');
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const storedRole = (localStorage.getItem('userRole') || '').toLowerCase();
-    if (!token || (storedRole !== 'admin' && storedRole !== 'editor')) {
+    const { signedIn, role: storedRole } = readSession();
+    if (!signedIn || (storedRole !== 'admin' && storedRole !== 'editor')) {
       alert('Bạn không có quyền truy cập trang này!');
       router.push('/posts');
       return;
     }
+    // Chỉ chạy một lần sau khi mount: đọc phiên từ localStorage rồi chặn/chuyển hướng.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRole(storedRole);
   }, [router]);
 

@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { isAxiosError } from 'axios';
-import { apiClient, apiUrl, mediaUrl } from '@/lib/api';
+import { apiClient, apiErrorMessage, apiUrl, mediaUrl } from '@/lib/api';
+import { useSession } from '@/lib/session';
 import type { MediaItem } from '@/app/components/MediaPicker';
 
 export default function MediaLibraryPage() {
@@ -14,7 +14,7 @@ export default function MediaLibraryPage() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
-  const [userRole, setUserRole] = useState('author');
+  const userRole = useSession().role;
 
   const canDelete = userRole === 'admin' || userRole === 'editor';
 
@@ -35,7 +35,8 @@ export default function MediaLibraryPage() {
   }, []);
 
   useEffect(() => {
-    setUserRole((localStorage.getItem('userRole') || 'author').toLowerCase());
+    // Tải dữ liệu khi vào trang; load() đặt trạng thái loading đồng bộ.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load(1);
   }, [load]);
 
@@ -49,8 +50,7 @@ export default function MediaLibraryPage() {
       await apiClient.post(apiUrl('upload'), formData);
       await load(1);
     } catch (err) {
-      const message = isAxiosError(err) ? err.response?.data?.error : undefined;
-      alert(message || 'Upload ảnh thất bại!');
+      alert(apiErrorMessage(err, 'Upload ảnh thất bại!'));
     } finally {
       setUploading(false);
       e.target.value = '';
@@ -64,8 +64,7 @@ export default function MediaLibraryPage() {
       setItems((prev: MediaItem[]) => prev.filter((i) => i.name !== item.name));
       setTotal((n) => Math.max(0, n - 1));
     } catch (err) {
-      const message = isAxiosError(err) ? err.response?.data?.error : undefined;
-      alert(message || 'Xóa ảnh thất bại!');
+      alert(apiErrorMessage(err, 'Xóa ảnh thất bại!'));
     }
   };
 

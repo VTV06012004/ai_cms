@@ -4,8 +4,18 @@ import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { apiClient, apiUrl, mediaUrl } from '@/lib/api';
 
+interface PostDetail {
+  id: number;
+  ID?: number;
+  title: string;
+  content: string;
+  status: string;
+  category?: { name: string };
+  author?: { username?: string; name?: string };
+}
+
 function PostDetailContent() {
-  const [post, setPost] = useState<any>(null);
+  const [post, setPost] = useState<PostDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   

@@ -38,6 +38,8 @@ export default function MediaPicker({ onSelect, onClose }: Props) {
   }, []);
 
   useEffect(() => {
+    // Tải dữ liệu khi vào trang; load() đặt trạng thái loading đồng bộ.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load(1);
   }, [load]);
 

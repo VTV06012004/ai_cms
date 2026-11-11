@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { apiClient, apiUrl } from '@/lib/api';
+import { apiClient, apiErrorMessage, apiUrl } from '@/lib/api';
+import { saveSession } from '@/lib/session';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -25,19 +26,20 @@ export default function LoginPage() {
 
       const { token, user } = response.data;
 
-      localStorage.setItem('token', token);
-      localStorage.setItem('userRole', user?.role || 'author');
-      localStorage.setItem('userName', user?.name || 'User');
-      localStorage.setItem('userEmail', user?.email || email);
-
-      localStorage.setItem('userId', String(user?.id || user?.ID || response.data.user_id || ''));
+      saveSession({
+        token,
+        role: user?.role || 'author',
+        name: user?.name || 'User',
+        email: user?.email || email,
+        userId: String(user?.id || user?.ID || response.data.user_id || ''),
+      });
       alert(`Đăng nhập thành công với vai trò: ${user?.role || 'author'}`);
 
       // Chuyển hướng về trang quản lý bài viết
       router.push('/posts');
-    } catch (err: any) {
+    } catch (err) {
       console.error('Lỗi đăng nhập:', err);
-      setError(err.response?.data?.error || 'Email hoặc mật khẩu không chính xác!');
+      setError(apiErrorMessage(err, 'Email hoặc mật khẩu không chính xác!'));
     } finally {
       setLoading(false);
     }
